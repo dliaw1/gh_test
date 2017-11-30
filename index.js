@@ -146,6 +146,9 @@ var server = net.createServer(socket => {
       rooms[roomname].clients.push(socket);
       rooms[roomname].usernames.push(socket.username);
       broadcast(socket.username + sm.userEnter, socket, roomname);
+      var numUsers = rooms[roomname].usernames.length;
+      var userList = rooms[roomname].usernames.join(", ");
+      socket.write(numUsers + sm.currentUsers + userList + "\n");
     }
   }
 
