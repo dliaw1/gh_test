@@ -21,7 +21,7 @@ var server = net.createServer(socket => {
 
     // Chat commands
     if (dataStr[0] === '/') {
-      if (chatCommandHandler(socket, dataStr, isUsernameSet) === -1) {
+      if (chatCommandHandler(dataStr, isUsernameSet) === -1) {
         return;
       }
     }
@@ -54,7 +54,6 @@ var server = net.createServer(socket => {
   socket.on('end', () => {
     clients.splice(clients.indexOf(socket), 1);
     usernames.splice(usernames.indexOf(socket.username), 1);
-    //broadcast(socket.name + " left the chat.\n");
   });
 
   // Send message to all clients in same room
@@ -65,7 +64,7 @@ var server = net.createServer(socket => {
       }
       var roomClients = rooms[roomname].clients;
       for (var i in roomClients) {
-        var client = roomClients[i]
+        var client = roomClients[i];
         client.write(message);
         if (client !== sender) {
           client.write(sm.readyPrompt);
@@ -80,27 +79,33 @@ var server = net.createServer(socket => {
 
   // Handle chat commands
   // Returns -1 if quitting
-  function chatCommandHandler(socket, dataStr, isUsernameSet) {
+  function chatCommandHandler(dataStr, isUsernameSet) {
     var wordTokens = dataStr.split(' ');
     if (wordTokens[0].match(/^\/(h|help)$/)) {
       socket.write(sm.help);
     }
     else if (wordTokens[0].match(/^\/(q|quit)$/)) {
+      if (socket.roomname !== undefined) {
+        leaveRoom();
+      }
       socket.end(sm.bye);
       return -1;
     }
     // Only allow help and quit commands while username has not been set
     else if (wordTokens[0].match(/^\/(r|rooms)$/) && isUsernameSet) {
       socket.write(sm.availableRooms);
-      for (roomname in rooms) {
+      for (var roomname in rooms) {
         socket.write("\t" + roomname + " (" + rooms[roomname].clients.length + ")\n");
       }
     }
     else if (wordTokens[0].match(/^\/(j|join)$/) && isUsernameSet) {
-      joinRoom(socket, wordTokens[1]);
+      joinRoom(wordTokens[1]);
+    }
+    else if (wordTokens[0].match(/^\/(ul|list)$/) && isUsernameSet) {
+      listUsers(wordTokens[1]);
     }
     else if (wordTokens[0].match(/^\/(l|leave)$/) && isUsernameSet) {
-      leaveRoom(socket);
+      leaveRoom();
     }
     else {
       socket.write(wordTokens[0] + sm.invalidCommand);
@@ -131,12 +136,12 @@ var server = net.createServer(socket => {
     return isValidUsername;
   }
 
-  function joinRoom(socket, roomname) {
+  function joinRoom(roomname) {
     if (roomname === undefined) {
       socket.write(sm.roomnameEmpty);
     }
     else if (!rooms.hasOwnProperty(roomname)) {
-      socket.write(sm.invalidRoomname);
+      socket.write(roomname + sm.invalidChatroom);
     }
     else if (socket.roomname === roomname) {
       socket.write(sm.alreadyInRoom);
@@ -146,26 +151,40 @@ var server = net.createServer(socket => {
       rooms[roomname].clients.push(socket);
       rooms[roomname].usernames.push(socket.username);
       broadcast(socket.username + sm.userEnter, socket, roomname);
-      var numUsers = rooms[roomname].usernames.length;
-      var userList = rooms[roomname].usernames.join(", ");
-      socket.write(numUsers + sm.currentUsers + userList + "\n");
+      listUsers(roomname);
     }
   }
 
-  function leaveRoom(socket, quit) {
-    if (socket.roomname === undefined && !quit) {
+  function leaveRoom() {
+    if (socket.roomname === undefined) {
       socket.write(sm.notInRoom);
+      return;
+    }
+    var room = rooms[socket.roomname];
+    var roomClients = room.clients;
+    roomClients.splice(roomClients.indexOf(socket), 1);
+    var roomUsers = room.usernames;
+    roomUsers.splice(roomUsers.indexOf(socket.username));
+
+    socket.write(sm.selfLeave + socket.roomname + "\n");
+    broadcast(socket.username + sm.userLeave, socket, socket.roomname);
+    socket.roomname = undefined;
+  }
+
+  function listUsers(roomname) {
+    if (roomname === undefined || roomname.length < 1) {
+      socket.write(sm.roomnameEmpty);
+    }
+    else if (!rooms.hasOwnProperty(roomname)) {
+      socket.write(roomname + sm.invalidChatroom);
     }
     else {
-      var room = rooms[socket.roomname];
-      var roomClients = room.clients;
-      roomClients.splice(roomClients.indexOf(socket), 1);
-      var roomUsers = room.usernames;
-      roomUsers.splice(roomUsers.indexOf(socket.username));
-
-      socket.write(sm.selfLeave + socket.roomname);
-      broadcast(socket.username + sm.userLeave, socket, socket.roomname);
-      socket.roomname = undefined;
+      var numUsers = rooms[roomname].usernames.length;
+      var userList = rooms[roomname].usernames.join(", ");
+      socket.write(numUsers + sm.usersInRoom + roomname + "\n");
+      if (userList.length) {
+        socket.write(userList + "\n");
+      }
     }
   }
 
