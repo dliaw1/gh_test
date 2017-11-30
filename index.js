@@ -27,7 +27,7 @@ var server = net.createServer(socket => {
     }
     // New user - verify username
     else if (!isUsernameSet) {
-      if (verifyUsername(dataStr)) {
+      if (verifyName(dataStr)) {
         usernames.push(dataStr);
         socket.username = dataStr;
         socket.write(sm.welcomeUser + dataStr + "\n");
@@ -98,6 +98,9 @@ var server = net.createServer(socket => {
         socket.write("\t" + roomname + " (" + rooms[roomname].clients.length + ")\n");
       }
     }
+    else if (wordTokens[0].match(/^\/(c|create)$/) && isUsernameSet) {
+      createRoom(wordTokens[1]);
+    }
     else if (wordTokens[0].match(/^\/(j|join)$/) && isUsernameSet) {
       joinRoom(wordTokens[1]);
     }
@@ -118,22 +121,47 @@ var server = net.createServer(socket => {
   }
 
   // Check that user/chatroom name is valid
-  function verifyUsername(username) {
-    var isValidUsername = true;
-    if (username.length < 1) {
+  // Pass in true to chatroom if checking chatroom name
+  function verifyName(name, chatroom) {
+    var isValidName = true;
+    if (name.length < 1) {
       socket.write(sm.blankNameEntry);
-      isValidUsername = false;
+      isValidName = false;
     }
-    else if (username.match(/^[\w\-\.]+$/) === null) {
+    else if (name.length > 31) {
+      socket.write(sm.nameEntryTooLong);
+      isValidName = false;
+    }
+    else if (name.match(/^[\w\-\.]+$/) === null) {
       socket.write(sm.invalidCharsInName);
-      isValidUsername = false;
+      isValidName = false;
     }
-    else if (usernames.indexOf(username) !== -1) {
-      socket.write(sm.nameTaken);
-      isValidUsername = false;
+    else if (chatroom && rooms.hasOwnProperty(chatroom)) {
+      socket.write(sm.roomAlreadyExists);
+      isValidName = false;
+    }
+    else if (!chatroom && usernames.indexOf(name) !== -1) {
+      socket.write(sm.usernameTaken);
+      isValidName = false;
     }
 
-    return isValidUsername;
+    return isValidName;
+  }
+
+  function createRoom(roomname) {
+    if (roomname === undefined) {
+      socket.write(sm.roomnameEmpty);
+    }
+    else if (rooms.hasOwnProperty(roomname)) {
+      socket.write(sm.roomAlreadyExists);
+    }
+    else if (verifyName(roomname, true)) {
+      rooms[roomname] = {
+        clients: [],
+        usernames: [],
+      };
+      socket.write(roomname + sm.roomCreated);
+    }
   }
 
   function joinRoom(roomname) {
