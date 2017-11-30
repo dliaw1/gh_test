@@ -18,8 +18,10 @@ module.exports = {
 	roomnameEmpty: "Please enter a valid chatroom name\n",
 	roomnameInvalid: " is not a valid chatroom\n",
 	alreadyInRoom: "You are already in the room\n",
+	notInRoom: "You are not currently in a room\n",
 	userEnter: " has entered the room\n",
-	otherUserLeave: " has left the room\n",
+	userLeave: " has left the room\n",
+	selfLeave: "You have left ",
 
 	// Prompts
 	usernamePrompt: "Username: ",

@@ -100,7 +100,7 @@ var server = net.createServer(socket => {
       joinRoom(socket, wordTokens[1]);
     }
     else if (wordTokens[0].match(/^\/(l|leave)$/) && isUsernameSet) {
-      // TO_DO: Leave chatroom handler
+      leaveRoom(socket);
     }
     else {
       socket.write(wordTokens[0] + sm.invalidCommand);
@@ -146,6 +146,23 @@ var server = net.createServer(socket => {
       rooms[roomname].clients.push(socket);
       rooms[roomname].usernames.push(socket.username);
       broadcast(socket.username + sm.userEnter, socket, roomname);
+    }
+  }
+
+  function leaveRoom(socket, quit) {
+    if (socket.roomname === undefined && !quit) {
+      socket.write(sm.notInRoom);
+    }
+    else {
+      var room = rooms[socket.roomname];
+      var roomClients = room.clients;
+      roomClients.splice(roomClients.indexOf(socket), 1);
+      var roomUsers = room.usernames;
+      roomUsers.splice(roomUsers.indexOf(socket.username));
+
+      socket.write(sm.selfLeave + socket.roomname);
+      broadcast(socket.username + sm.userLeave, socket, socket.roomname);
+      socket.roomname = undefined;
     }
   }
 
