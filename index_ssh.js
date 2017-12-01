@@ -19,77 +19,97 @@ new ssh2.Server({
   var cols;
   var width;
   var height;
+  var session;
+  var reject = false;
+
+  console.log('connection');
+
   client.on('authentication', (ctx) => {
-    if (ctx.method !== 'none' && ctx.method !== 'keyboard-interactive') {
-      ctx.reject();
-      return;
+    if (ctx.method !== 'keyboard-interactive') {
+      return ctx.reject(['keyboard-interactive']);
     }
     namePrompt([ctx.username]);
     function namePrompt(input) {
-      if (input.length === 0 || input[0].match(/^\/(q|quit)$/)) {
+      try {
+        var name = input[0];
+      }
+      catch(e) {
+        console.log(e);
         ctx.reject();
         return;
       }
-      var validation= verifyName(input[0], false);
+      var validation = verifyName(name, false);
       if (!validation.isValidName) {
-        ctx.prompt(vd.err + sm.usernamePrompt, namePrompt);
+        ctx.prompt(validation.err + sm.usernamePrompt, namePrompt);
       }
       else {
+        console.log('accept');
+        console.log(name + '->' + usernames);
+        usernames.push(name);
         ctx.accept();
       }
     }
   });
 
-  // Figure out sequence of events/what events need to be handled
-  client.on('pty', (accept, reject, info) => {
-    console.log('pty');
-  });
+  client.once('ready', () => {
+    console.log('ready');
+    client.once('session', (accept, reject) => {
+      console.log('session');
+      session = accept();
+      // Figure out sequence of events/what events need to be handled
+      session.once('pty', (accept, reject, info) => {
+        console.log('pty');
+      });
 
-  client.on('window-change', (accept, reject, info) => {
-    console.log('window-change');
-  });
+      session.on('window-change', (accept, reject, info) => {
+        console.log('window-change');
+      });
 
-  client.on('x11', (accept, reject, info) => {
-    console.log('x11');
-  });
+      session.on('x11', (accept, reject, info) => {
+        console.log('x11');
+      });
 
-  client.on('env', (accept, reject, info) => {
-    console.log('env');
-  });
+      session.on('env', (accept, reject, info) => {
+        console.log('env');
+      });
 
-  client.on('signal', (accept, reject, info) => {
-    console.log('signal');
-  });
+      session.on('signal', (accept, reject, info) => {
+        console.log('signal');
+      });
 
-  client.on('auth-agent', (accept, reject, info) => {
-    console.log('auth-agent');
-  });
+      session.on('auth-agent', (accept, reject, info) => {
+        console.log('auth-agent');
+      });
 
-  client.on('shell', (accept, reject) => {
-    console.log('shell');
-  });
+      session.on('shell', (accept, reject) => {
+        console.log('shell');
+      });
 
-  client.on('exec', (accept, reject, info) => {
-    console.log('exec');
-  });
+      session.on('exec', (accept, reject, info) => {
+        console.log('exec');
+      });
 
-  client.on('stfp', (accept, reject, info) => {
-    console.log('stfp');
-  });
+      session.on('stfp', (accept, reject, info) => {
+        console.log('stfp');
+      });
 
-  client.on('subsystem', (accept, reject, info) => {
-    console.log('subsystem');
-  });
+      session.on('subsystem', (accept, reject, info) => {
+        console.log('subsystem');
+      });
 
-  client.on('close', (accept, reject, info) => {
-    console.log('close');
+      session.on('close', (accept, reject, info) => {
+        console.log('close');
+      });
+    });
   });
 
   // Check that user/chatroom name is valid
   // Pass in true to chatroom parameter if checking chatroom name
   function verifyName(name, chatroom) {
+    console.log('verifyName: ' + name);
     var isValidName = true;
     var message;
+    console.log(name + '->?' + usernames);
     if (name.length < 1) {
       message = sm.blankNameEntry;
       isValidName = false;
@@ -113,6 +133,7 @@ new ssh2.Server({
 
     return { 'isValidName': isValidName, 'err': message };
   }
+
 });
 
 server.listen(9001, () => {
