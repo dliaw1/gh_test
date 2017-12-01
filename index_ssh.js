@@ -115,6 +115,11 @@ new ssh2.Server({
   }
 });
 
+server.listen(9001, () => {
+  console.log('listening on port 9001');
+});
+
+/*
 var server = net.createServer(socket => {
   // Add new client to list
   clients.push(socket);
@@ -298,6 +303,7 @@ var server = net.createServer(socket => {
 
 });
 server.listen(9001);
+*/
 
 
 console.log("Chat server running on port 9001\n");
