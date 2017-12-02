@@ -16,7 +16,7 @@ module.exports = {
 	usernameChange: "  Your username has been changed to ",
 
 	// Chatroom messages
-	chooseRoom: "Join a room to begin chatting\n",
+	selectRoomTitle: "*** Choose a room ***",
 	availableRooms: "Available rooms:\n",
 	roomCreated: " has been created\n",
 	userEnter: " has entered the room\n",

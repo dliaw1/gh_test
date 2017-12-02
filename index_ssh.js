@@ -1,4 +1,3 @@
-const net = require('net');
 const fs = require('fs');
 const ssh2 = require('ssh2');
 const blessed = require('blessed');
@@ -114,36 +113,137 @@ new ssh2.Server({
         streams.push(stream);
 
         var screen = new blessed.screen({
+          autoPadding: true,
           smartCSR: true,
           title: 'GH Chat',
           input: stream,
           output: stream,
-          terminal: ttyInfo.term
+          terminal: ttyInfo.term,
+          cursor: {
+            artificial: true,
+            color: 'black',
+            shape: 'line',
+            blink: true
+          }
         });
 
         var roomTitle = new blessed.box({
-          
+          top: 0,
+          height: 1,
+          width: '100%',
+          bg: 'blue',
+          fg: 'white',
+          content: sm.selectRoomTitle,
+          align: 'center'
         });
 
-        var chatlog = new blessed.box({
-          scrollable: true,
-          top: 0,
+        var chatlog = new blessed.log({
+          top: 1,
           left: 0,
-          bottom: 2,
+          bottom: 1,
           width: '100%',
-          bg: 'white',
           border: {
             type: 'line',
             fg: 'white'
+          },
+          //scrollOnInput: true,
+          scrollable: true,
+          alwaysScroll: true,
+          scrollbar: {
+            fg: 'blue'
+          },
+          mouse: true
+        });
+
+        var chatInput = new blessed.textbox({
+          bottom: 0,
+          height: 1,
+          width: '100%',
+          padding: 0,
+          bg: 'white',
+          fg: 'black',
+          inputOnFocus: true
+        });
+
+        screen.append(roomTitle);
+        screen.append(chatlog);
+        screen.append(chatInput);
+        chatInput.focus();
+        screen.render();
+
+        chatInput.on('submit', (line) => {
+          chatInput.clearValue();
+          chatInput.focus();
+          line = line.trim().replace(/\s+/g, ' ');
+          if (!line || line.length === 0) {
+            return;
+          }  
+          chatlog.add(line);
+          
+          return;
+          if (line[0] === '/') {
+            handleChatCommand(line);
+            return;
+          }
+
+          if (stream.room === undefined) {
+            //sysMessage()
+          }
+          else {
+            //broadcast(socket.username + ": " + Buffer.from(dataStr) + "\n", socket, socket.roomname);
           }
         });
-        screen.append(chatlog);
-
-        screen.render();
 
         stream.on('close', () => {
           screen.destroy();
         });
+
+        //function listRooms()
+
+        // Handle chat commands
+        // Returns -1 if quitting
+        /*
+        function chatCommandHandler(text) {
+          var wordTokens = text.split(' ');
+          if (wordTokens[0].match(/^\/(h|help)$/)) {
+            socket.write(sm.help);
+          }
+          else if (wordTokens[0].match(/^\/(q|quit)$/)) {
+            if (socket.roomname !== undefined) {
+              leaveRoom();
+            }
+            socket.end(sm.bye);
+            return -1;
+          }
+          // Only allow help and quit commands while username has not been set
+          else if (wordTokens[0].match(/^\/(r|rooms)$/) && isUsernameSet) {
+            socket.write(sm.availableRooms);
+            for (var roomname in rooms) {
+              socket.write("\t" + roomname + " (" + rooms[roomname].clients.length + ")\n");
+            }
+          }
+          else if (wordTokens[0].match(/^\/(c|create)$/) && isUsernameSet) {
+            createRoom(wordTokens[1]);
+          }
+          else if (wordTokens[0].match(/^\/(j|join)$/) && isUsernameSet) {
+            joinRoom(wordTokens[1]);
+          }
+          else if (wordTokens[0].match(/^\/(ul|list)$/) && isUsernameSet) {
+            listUsers(wordTokens[1]);
+          }
+          else if (wordTokens[0].match(/^\/(l|leave)$/) && isUsernameSet) {
+            leaveRoom();
+          }
+          else {
+            socket.write(wordTokens[0] + sm.invalidCommand);
+          }
+
+          if (!isUsernameSet) {
+            socket.write(sm.usernamePrompt);
+            return;
+          }
+        }
+        */
       });
 
       session.on('exec', (accept, reject, info) => {
@@ -160,6 +260,7 @@ new ssh2.Server({
 
       session.on('close', (accept, reject, info) => {
         console.log('close');
+        screen.destroy();
       });
     });
   });
@@ -203,48 +304,6 @@ server.listen(9001, () => {
 
 /*
 var server = net.createServer(socket => {
-  // Add new client to list
-  clients.push(socket);
-
-  socket.write(sm.welcome);
-  socket.write(sm.usernamePrompt);
-
-  // Incoming message handler
-  socket.on('data', data => {
-    var dataStr = data.toString('utf8').trim();
-    var isUsernameSet = (socket.username !== undefined);
-
-    // Chat commands
-    if (dataStr[0] === '/') {
-      if (chatCommandHandler(dataStr, isUsernameSet) === -1) {
-        return;
-      }
-    }
-    // New user - verify username
-    else if (!isUsernameSet) {
-      if (verifyName(dataStr)) {
-        usernames.push(dataStr);
-        socket.username = dataStr;
-        socket.write(sm.welcomeUser + dataStr + "\n");
-        socket.write(sm.chooseRoom);
-        socket.write(sm.readyPrompt);
-
-      }
-      else {
-        socket.write(sm.usernamePrompt);
-      }
-      return;
-    }
-    else if (dataStr.length < 1) {
-      socket.write(sm.readyPrompt);
-      return;
-    }
-    else {
-      broadcast(socket.username + ": " + Buffer.from(dataStr) + "\n", socket, socket.roomname);
-    }
-    socket.write(sm.readyPrompt);
-  });
-
   // Remove the client from the list when it leaves
   socket.on('end', () => {
     clients.splice(clients.indexOf(socket), 1);
