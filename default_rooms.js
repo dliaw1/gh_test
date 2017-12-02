@@ -1,6 +1,6 @@
 module.exports = {
 	general: {
-		clients: [],
+		streams: [],
 		usernames: []
 	}
 };
