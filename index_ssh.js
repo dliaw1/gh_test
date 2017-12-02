@@ -15,6 +15,7 @@ var server =
 new ssh2.Server({
   hostKeys: [fs.readFileSync('host.key')]
 }, (client) => {
+  var stream;
 
   client.on('authentication', (ctx) => {
     // Force keyboard auth to do custom checks
@@ -55,7 +56,6 @@ new ssh2.Server({
       var ttyInfo;
 
       var session = accept();
-      var stream;
       
       // Get initial ptty info
       session.once('pty', (accept, reject, info) => {
@@ -196,7 +196,8 @@ new ssh2.Server({
         }
 
         // Send message to all clients in same room
-        function broadcast(message, roomname) {
+        // Pass true into system param if system broadcast
+        function broadcast(message, roomname, system) {
           try {
             if (roomname === undefined) {
               stream.chatlog.add(stream.username + ": " + message);
@@ -253,7 +254,7 @@ new ssh2.Server({
             stream.roomname = roomname;
             rooms[roomname].streams.push(stream);
             rooms[roomname].usernames.push(stream.username);
-            broadcast(stream.username + sm.userEnter, roomname);
+            broadcast(stream.username + sm.userEnter, roomname, true);
             listUsers(roomname);
             roomTitle.setContent('~' + roomname + '~');
           }
@@ -271,7 +272,7 @@ new ssh2.Server({
           roomUsers.splice(roomUsers.indexOf(stream.username));
 
           systemMessage(sm.selfLeave + stream.roomname + "\n");
-          broadcast(stream.username + sm.userLeave, stream.roomname);
+          broadcast(stream.username + sm.userLeave, stream.roomname, true);
           stream.roomname = undefined;
           roomTitle.setContent(sm.selectRoomTitle);
         }
@@ -292,10 +293,8 @@ new ssh2.Server({
           else {
             var numUsers = rooms[roomname].usernames.length;
             var userList = rooms[roomname].usernames.join(", ");
-            systemMessage(numUsers + sm.usersInRoom + roomname + "\n");
-            if (userList.length) {
-              systemMessage(userList + "\n");
-            }
+            systemMessage(numUsers + sm.usersInRoom + roomname +
+              (userList.length ? ("\n" + userList) : ''));
           }
         }
 
@@ -310,10 +309,6 @@ new ssh2.Server({
             if (stream.roomname !== undefined) {
               leaveRoom();
             }
-            streams.splice(streams.indexOf(stream), 1);
-            usernames.splice(usernames.indexOf(stream.username), 1);
-            stream.screen.removeAllListeners();
-            stream.chatlog.removeAllListeners();
             stream.end();
           }
           else if (wordTokens[0].match(/^\/(r|rooms)$/)) {
@@ -354,6 +349,14 @@ new ssh2.Server({
       });
     });
   });
+
+  client.on('end', () => {
+    if (stream !== undefined) {
+      streams.splice(streams.indexOf(stream), 1);
+      usernames.splice(usernames.indexOf(stream.username), 1);
+      stream.end();
+    }
+  })
 
   // Check that user/chatroom name is valid
   // Pass in true to chatroom parameter if checking chatroom name
