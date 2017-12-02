@@ -1,12 +1,13 @@
 const net = require('net');
 const fs = require('fs');
 const ssh2 = require('ssh2');
+const blessed = require('blessed');
 
 const sm = require('./server_messages.js');
 var rooms = require('./default_rooms.js');
 
 // Chat users
-var clients = [];
+var streams = [];
 var usernames = [];
 
 var MAX_NAME_LENGTH = 15;
@@ -15,20 +16,20 @@ var server =
 new ssh2.Server({
   hostKeys: [fs.readFileSync('host.key')]
 }, (client) => {
-  var rows;
-  var cols;
-  var width;
-  var height;
-  var session;
-  var reject = false;
-
   console.log('connection');
 
   client.on('authentication', (ctx) => {
+    // Force keyboard auth to do custom checks
     if (ctx.method !== 'keyboard-interactive') {
       return ctx.reject(['keyboard-interactive']);
     }
+
+    var username;
+
+    // Prompt for username until satisfied
+    // namePrompt calls back to itself to loop
     namePrompt([ctx.username]);
+
     function namePrompt(input) {
       try {
         var name = input[0];
@@ -46,23 +47,45 @@ new ssh2.Server({
         console.log('accept');
         console.log(name + '->' + usernames);
         usernames.push(name);
+        client.username = name;
         ctx.accept();
       }
     }
   });
 
+  // Begin session
   client.once('ready', () => {
     console.log('ready');
     client.once('session', (accept, reject) => {
+      var ttyInfo;
+
       console.log('session');
-      session = accept();
-      // Figure out sequence of events/what events need to be handled
+      var session = accept();
+      var stream;
+      
+      // Get initial ptty info
       session.once('pty', (accept, reject, info) => {
-        console.log('pty');
+        console.log('pty - ', info);
+        ttyInfo = info;
+        if (accept) {
+          accept();
+        }
       });
 
+      // Update ptty info on client window resize
       session.on('window-change', (accept, reject, info) => {
-        console.log('window-change');
+        console.log('window-change - ', info);
+        for (var k in info) {
+          ttyInfo[k] = info[k];
+        }
+        if (stream !== undefined) {
+          stream.rows = ttyInfo.rows;
+          stream.cols = ttyInfo.cols;
+          stream.term = ttyInfo.term;
+        }
+        if (accept) {
+          accept();
+        }
       });
 
       session.on('x11', (accept, reject, info) => {
@@ -70,7 +93,7 @@ new ssh2.Server({
       });
 
       session.on('env', (accept, reject, info) => {
-        console.log('env');
+        console.log('env - ', info);
       });
 
       session.on('signal', (accept, reject, info) => {
@@ -83,6 +106,44 @@ new ssh2.Server({
 
       session.on('shell', (accept, reject) => {
         console.log('shell');
+        stream = accept();
+        stream.username = client.username;
+        stream.columns = ttyInfo.cols;
+        stream.rows = ttyInfo.rows;
+        stream.isTTY = true;
+        streams.push(stream);
+
+        var screen = new blessed.screen({
+          smartCSR: true,
+          title: 'GH Chat',
+          input: stream,
+          output: stream,
+          terminal: ttyInfo.term
+        });
+
+        var roomTitle = new blessed.box({
+          
+        });
+
+        var chatlog = new blessed.box({
+          scrollable: true,
+          top: 0,
+          left: 0,
+          bottom: 2,
+          width: '100%',
+          bg: 'white',
+          border: {
+            type: 'line',
+            fg: 'white'
+          }
+        });
+        screen.append(chatlog);
+
+        screen.render();
+
+        stream.on('close', () => {
+          screen.destroy();
+        });
       });
 
       session.on('exec', (accept, reject, info) => {
