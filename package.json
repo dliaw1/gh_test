@@ -1,0 +1,24 @@
+{
+  "name": "gh_test",
+  "version": "1.0.0",
+  "description": "simple chat server",
+  "main": "index_ssh.js",
+  "dependencies": {
+    "blessed": "^0.1.81",
+    "ssh2": "^0.5.5"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dliaw1/gh_test.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dliaw1/gh_test/issues"
+  },
+  "homepage": "https://github.com/dliaw1/gh_test#readme"
+}
