@@ -6,6 +6,7 @@ const sm = require('./server_messages.js');
 const emotes = require('./emotes.js');
 var rooms = require('./default_rooms.js');
 
+// Yellow is because the hex code keeps displaying as gray for some reason
 var colors = {aqua: "#000fff", blue: "#0000ff", fuchsia: "#ff00ff",
               green: "#008000", lime: "#00ff00", maroon: "#800000", navy: "#000080",
               olive: "#808000", purple: "#800080", red: "#ff0000", silver: "#c0c0c0",
@@ -33,8 +34,9 @@ new ssh2.Server({
     var username;
 
     // Prompt for username until satisfied
-    // namePrompt calls back to itself to loop
-    namePrompt([ctx.username]);
+    // Don't use ctx.username in case client automatically
+    // passes in local system username
+    ctx.prompt(sm.usernamePrompt, namePrompt);
 
     function namePrompt(input) {
       try {
@@ -283,6 +285,9 @@ new ssh2.Server({
       else if (wordTokens[0].match(/^\/(u|users)$/)) {
         listUsers(wordTokens[1]);
       }
+      else if (wordTokens[0].match(/^\/(color)$/)) {
+        setUserColor(wordTokens[1]);
+      }
       else if (wordTokens[0].match(/^\/(l|leave)$/)) {
         leaveRoom();
       }
@@ -375,6 +380,11 @@ new ssh2.Server({
         setupKeyEvents()
         chatInput.focus();
         systemMessage(sm.welcome);
+
+        // Randomly assign user a color
+        var randColor = colorNames[Math.floor(Math.random() * colorNames.length)];
+        setUserColor(randColor);
+
         listRooms();
         screen.render();
     }
@@ -424,10 +434,6 @@ new ssh2.Server({
       if (stream !== undefined) {
         stream.username = client.username;
 
-        // Randomly assign user a color
-        var randColor = colorNames[Math.floor(Math.random() * colorNames.length)];
-        setUserColor(randColor);
-
         // PTTY things
         stream.columns = ttyInfo.cols;
         stream.rows = ttyInfo.rows;
@@ -457,19 +463,30 @@ new ssh2.Server({
       }
     }
 
-    function setUserColor(color) {
-      if (color === undefined ||
-          color.length < 1 ||
-          colorNames.indexOf(color) === -1) {
+    function setUserColor(colorName) {
+      if (colorName === undefined ||
+          colorName.length < 1 ||
+          colorNames.indexOf(colorName.toLowerCase()) === -1) {
+        var colorList = colorNames.map(c => "{" + colors[c] + "-fg}" + c + "{/}")
+                                  .join(", "); 
+        systemMessage(sm.validColors + colorList);
         return;
       }
+      colorName = colorName.toLowerCase()
 
-      stream.color = colors[color];
-      stream.pName = "{" + stream.color + "-fg}" +
-                     stream.username +
-                     "{/}";
+      stream.color = colors[colorName];
+      stream.pName = wrapColorText(stream.color, stream.username);
+      systemMessage(sm.colorSet + wrapColorText(stream.color, colorName));
     }
   });
+
+  // color = actual color value, not the color name
+  function wrapColorText(color, text) {
+    if (color === undefined || color.length < 1) {
+      return text ? text : '';
+    }
+    return "{" + color + "-fg}" + text + "{/}";
+  }
 
   // Check that user/chatroom name is valid
   // Pass in true to chatroom parameter if checking chatroom name

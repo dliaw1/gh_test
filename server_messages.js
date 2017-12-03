@@ -12,9 +12,6 @@ module.exports = {
 	bye: "BYE",
 	windowTitle: "GH Chat - ",
 
-	// Username messages
-	welcomeUser: "Welcome, ",
-
 	// Chatroom messages
 	selectRoomTitle: "*** Choose a room ***",
 	availableRooms: "Available rooms:\n",
@@ -23,6 +20,11 @@ module.exports = {
 	userLeave: " has left the room",
 	selfLeave: "You have left ",
 	usersInRoom: " user(s) currently in ",
+
+	// Color messages
+	validColors: "Valid colors: ",
+	colorSet: "Color set to ",
+
 
 	// Prompts
 	usernamePrompt: "Username: ",
