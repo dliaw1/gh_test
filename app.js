@@ -49,7 +49,7 @@ new ssh2.Server({
       }
       var validation = verifyName(name, false);
       if (!validation.isValidName) {
-        ctx.prompt(validation.err + sm.usernamePrompt, namePrompt);
+        ctx.prompt(validation.err + "\n" + sm.usernamePrompt, namePrompt);
       }
       else {
         usernames.push(name);
@@ -149,24 +149,53 @@ new ssh2.Server({
     }
 
     // Send message to all clients in same room
-    // Pass true into system param if system broadcast
-    function broadcast(message, roomname, system) {
+    // type - 'room' or 'user'
+    // name - chatroom or username
+    // system - true if system broadcast
+    function broadcast(message, type, name, system) {
       try {
-        if (roomname === undefined) {
-          stream.chatlog.add(stream.pName + ": " + message);
-          screen.render();
-          return;
+        if (type === 'room') {
+          var roomStreams = rooms[name].streams;
+          if (message === undefined || message.length < 1) {
+            return;
+          }
+          for (var i in roomStreams) {
+            var userStream = roomStreams[i];
+            if (system) {
+              userStream.chatlog.add(sm.sysPrompt + message);
+            }
+            else {
+              userStream.chatlog.add(stream.pName + ": " + message);
+            }
+            userStream.screen.render();
+          }
         }
-        var roomStreams = rooms[roomname].streams;
-        for (var i in roomStreams) {
-          var userStream = roomStreams[i];
-          if (system) {
-            userStream.chatlog.add(sm.sysPrompt + message);
+        else if (type === 'user') {
+          if (name === undefined) {
+            systemMessage(sm.blankNameEntry);
+            return;
           }
-          else {
-            userStream.chatlog.add(stream.pName + ": " + message);
+          else if (usernames.indexOf(name) === -1) {
+            systemMessage(sm.userDNE);
+            return;
           }
-          userStream.screen.render();
+          if (message === undefined || message.length < 1) {
+            return;
+          }
+          else if (name === stream.username) {
+            stream.chatlog.add(stream.pName + ": " + message);
+            return;
+          }
+          for (var s in streams) {
+            if (streams[s].username === name) {
+              streams[s].chatlog.add(stream.pName + " (whisper): " + message);
+              stream.chatlog.add("whisper->" + streams[s].pName + ": " + message);
+              break;
+            }
+          }
+        }
+        else {
+          throw sm.invalidBroadcast + type;
         }
       }
       catch(e) {
@@ -176,10 +205,13 @@ new ssh2.Server({
 
     function listRooms() {
       var outstr = sm.availableRooms;
-        for (var roomname in rooms) {
-          outstr = outstr + "\t" + roomname + " (" + rooms[roomname].streams.length + ")\n";
-        }
-        systemMessage(outstr);
+      var i = 1;
+      for (var roomname in rooms) {
+        outstr = outstr + "\t" + i + ". " + roomname + 
+                 " (" + rooms[roomname].streams.length + ")\n";
+        i++;
+      }
+      systemMessage(outstr);
     }
 
     function createRoom(roomname) {
@@ -189,12 +221,18 @@ new ssh2.Server({
       else if (rooms.hasOwnProperty(roomname)) {
         systemMessage(sm.roomAlreadyExists);
       }
-      else if (verifyName(roomname, true)) {
-        rooms[roomname] = {
-          streams: [],
-          usernames: [],
-        };
-        systemMessage(roomname + sm.roomCreated);
+      else {
+        var validation = verifyName(roomname, true);
+        if (validation.isValidName) {
+          rooms[roomname] = {
+            streams: [],
+            usernames: [],
+          };
+          systemMessage(roomname + sm.roomCreated);
+        }
+        else {
+          systemMessage(validation.message);
+        }
       }
     }
 
@@ -213,9 +251,10 @@ new ssh2.Server({
           leaveRoom();
         }
         stream.roomname = roomname;
+        stream.chatlog.add(sm.selfEnter + roomname);
+        broadcast(stream.pName + sm.userEnter, 'room', roomname, true);
         rooms[roomname].streams.push(stream);
         rooms[roomname].usernames.push(stream.username);
-        broadcast(stream.pName + sm.userEnter, roomname, true);
         listUsers(roomname);
         roomTitle.setContent('~' + roomname + '~');
       }
@@ -233,7 +272,7 @@ new ssh2.Server({
       roomUsers.splice(roomUsers.indexOf(stream.username));
 
       systemMessage(sm.selfLeave + stream.roomname + "\n");
-      broadcast(stream.pName + sm.userLeave, stream.roomname, true);
+      broadcast(stream.pName + sm.userLeave, 'room', stream.roomname, true);
       stream.roomname = undefined;
       roomTitle.setContent(sm.selectRoomTitle);
     }
@@ -253,7 +292,7 @@ new ssh2.Server({
       }
       else {
         var numUsers = rooms[roomname].usernames.length;
-        var userList = rooms[roomname].usernames.join(", ");
+        var userList = rooms[roomname].streams.map(s => s.pName).join(", ");
         systemMessage(numUsers + sm.usersInRoom + roomname +
           (userList.length ? ("\n\t" + userList) : ''));
       }
@@ -273,7 +312,7 @@ new ssh2.Server({
         screen.render();
         stream.end();
       }
-      else if (wordTokens[0].match(/^\/(r|rooms)$/)) {
+      else if (wordTokens[0].match(/^\/(rooms)$/)) {
         listRooms();
       }
       else if (wordTokens[0].match(/^\/(c|create)$/)) {
@@ -288,6 +327,9 @@ new ssh2.Server({
       else if (wordTokens[0].match(/^\/(color)$/)) {
         setUserColor(wordTokens[1]);
       }
+      else if (wordTokens[0].match(/^\/(w|whisper)$/)) {
+        broadcast(wordTokens.slice(2).join(" "), 'user', wordTokens[1]);
+      }
       else if (wordTokens[0].match(/^\/(l|leave)$/)) {
         leaveRoom();
       }
@@ -300,7 +342,7 @@ new ssh2.Server({
       var wordTokens = text.split(' ');
       var emoteCmd = wordTokens[0].substring(1) // Assume first char is '!'
       if (emotes.hasOwnProperty(emoteCmd)) {
-        broadcast('\n' + emotes[emoteCmd], stream.roomname);
+        broadcast('\n' + emotes[emoteCmd], 'room', stream.roomname);
       }
     }
 
@@ -424,7 +466,12 @@ new ssh2.Server({
             return;
           }
           else {
-            broadcast(line, stream.roomname);
+            if (stream.roomname !== undefined) {
+              broadcast(line, 'room', stream.roomname);
+            } 
+            else {
+              stream.chatlog.add(stream.pName + ": " + line);
+            }
           }
           screen.render();
         });
