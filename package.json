@@ -2,13 +2,14 @@
   "name": "gh_test",
   "version": "1.0.0",
   "description": "simple chat server",
-  "main": "index_ssh.js",
+  "main": "app.js",
   "dependencies": {
     "blessed": "^0.1.81",
     "ssh2": "^0.5.5"
   },
   "devDependencies": {},
   "scripts": {
+    "start": "node app.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

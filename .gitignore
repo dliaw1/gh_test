@@ -2,3 +2,5 @@
 chatserver\.js
 
 node_modules/
+
+*.zip
