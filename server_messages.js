@@ -22,7 +22,7 @@ module.exports = {
 	userEnter: " has entered the room",
 	userLeave: " has left the room",
 	selfLeave: "You have left ",
-	usersInRoom: " users currently in ",
+	usersInRoom: " user(s) currently in ",
 
 	// Prompts
 	usernamePrompt: "Username: ",

@@ -52,9 +52,13 @@ new ssh2.Server({
 
   // Begin session
   client.once('ready', () => {
-    client.once('session', (accept, reject) => {
-      var ttyInfo;
+    var ttyInfo;
+    var screen;
+    var roomTitle;
+    var chatlog;
+    var chatInput;
 
+    client.once('session', (accept, reject) => {
       var session = accept();
       
       // Get initial ptty info
@@ -105,7 +109,7 @@ new ssh2.Server({
         stream.isTTY = true;
         streams.push(stream);
 
-        var screen = new blessed.screen({
+        screen = new blessed.screen({
           autoPadding: true,
           smartCSR: true,
           title: sm.windowTitle + stream.username,
@@ -120,7 +124,7 @@ new ssh2.Server({
           }
         });
 
-        var roomTitle = new blessed.box({
+        roomTitle = new blessed.box({
           screen: screen,
           top: 0,
           height: 1,
@@ -131,7 +135,7 @@ new ssh2.Server({
           align: 'center'
         });
 
-        var chatlog = new blessed.log({
+        chatlog = new blessed.log({
           screen: screen,
           top: 1,
           left: 0,
@@ -146,7 +150,7 @@ new ssh2.Server({
           scrollOnInput: true
         });
 
-        var chatInput = new blessed.textbox({
+        chatInput = new blessed.textbox({
           screen: screen,
           bottom: 0,
           height: 1,
@@ -194,159 +198,8 @@ new ssh2.Server({
         });
 
         stream.on('close', () => {
-          streams.splice(streams.indexOf(stream), 1);
-          usernames.splice(usernames.indexOf(stream.username), 1);
-          screen.destroy();
-        });
-
-        // Display message only to user
-        function systemMessage(text) {
-          stream.chatlog.add(sm.sysPrompt + text);
-        }
-
-        // Send message to all clients in same room
-        // Pass true into system param if system broadcast
-        function broadcast(message, roomname, system) {
-          try {
-            if (roomname === undefined) {
-              stream.chatlog.add(stream.username + ": " + message);
-              screen.render();
-              return;
-            }
-            var roomStreams = rooms[roomname].streams;
-            for (var i in roomStreams) {
-              var userStream = roomStreams[i];
-              if (system) {
-                userStream.chatlog.add(sm.sysPrompt + message);
-              }
-              else {
-                userStream.chatlog.add(stream.username + ": " + message);
-              }
-              userStream.screen.render();
-            }
-          }
-          catch(e) {
-            console.log(e);
-          }
-        }
-
-        function listRooms() {
-          var outstr = sm.availableRooms;
-            for (var roomname in rooms) {
-              outstr = outstr + "\t" + roomname + " (" + rooms[roomname].streams.length + ")\n";
-            }
-            systemMessage(outstr);
-        }
-
-        function createRoom(roomname) {
-          if (roomname === undefined) {
-            systemMessage(sm.roomnameEmpty);
-          }
-          else if (rooms.hasOwnProperty(roomname)) {
-            systemMessage(sm.roomAlreadyExists);
-          }
-          else if (verifyName(roomname, true)) {
-            rooms[roomname] = {
-              streams: [],
-              usernames: [],
-            };
-            systemMessage(roomname + sm.roomCreated);
-          }
-        }
-
-        function joinRoom(roomname) {
-          if (roomname === undefined) {
-            systemMessage(sm.roomnameEmpty);
-          }
-          else if (!rooms.hasOwnProperty(roomname)) {
-            systemMessage(roomname + sm.invalidChatroom);
-          }
-          else if (stream.roomname === roomname) {
-            systemMessage(sm.alreadyInRoom + roomname);
-          }
-          else {
-            if (stream.roomname !== undefined) {
-              leaveRoom();
-            }
-            stream.roomname = roomname;
-            rooms[roomname].streams.push(stream);
-            rooms[roomname].usernames.push(stream.username);
-            broadcast(stream.username + sm.userEnter, roomname, true);
-            listUsers(roomname);
-            roomTitle.setContent('~' + roomname + '~');
-          }
-        }
-
-        function leaveRoom() {
-          if (stream.roomname === undefined) {
-            systemMessage(sm.notInRoom);
-            return;
-          }
-          var room = rooms[stream.roomname];
-          var roomStreams = room.streams;
-          roomStreams.splice(roomStreams.indexOf(stream), 1);
-          var roomUsers = room.usernames;
-          roomUsers.splice(roomUsers.indexOf(stream.username));
-
-          systemMessage(sm.selfLeave + stream.roomname + "\n");
-          broadcast(stream.username + sm.userLeave, stream.roomname, true);
-          stream.roomname = undefined;
-          roomTitle.setContent(sm.selectRoomTitle);
-        }
-
-        function listUsers(roomname) {
-          if (roomname === undefined || roomname.length < 1) {
-            if (stream.roomname !== undefined) {
-              roomname = stream.roomname;
-            }
-            else {
-              systemMessage(sm.roomnameEmpty);
-              return;
-            }
-          }
-          else if (!rooms.hasOwnProperty(roomname)) {
-            systemMessage(roomname + sm.invalidChatroom);
-          }
-          else {
-            var numUsers = rooms[roomname].usernames.length;
-            var userList = rooms[roomname].usernames.join(", ");
-            systemMessage(numUsers + sm.usersInRoom + roomname +
-              (userList.length ? ("\n\t" + userList) : ''));
-          }
-        }
-
-        // Handle chat commands
-        // Returns -1 if quitting
-        function handleChatCommand(text) {
-          var wordTokens = text.split(' ');
-          if (wordTokens[0].match(/^\/(h|help)$/)) {
-            systemMessage(sm.help);
-          }
-          else if (wordTokens[0].match(/^\/(q|quit)$/)) {
-            if (stream.roomname !== undefined) {
-              leaveRoom();
-            }
-            stream.end();
-          }
-          else if (wordTokens[0].match(/^\/(r|rooms)$/)) {
-            listRooms();
-          }
-          else if (wordTokens[0].match(/^\/(c|create)$/)) {
-            createRoom(wordTokens[1]);
-          }
-          else if (wordTokens[0].match(/^\/(j|join)$/)) {
-            joinRoom(wordTokens[1]);
-          }
-          else if (wordTokens[0].match(/^\/(u|users)$/)) {
-            listUsers(wordTokens[1]);
-          }
-          else if (wordTokens[0].match(/^\/(l|leave)$/)) {
-            leaveRoom();
-          }
-          else {
-            systemMessage(wordTokens[0] + sm.invalidCommand);
-          }
-        }
+          console.log('stream close');
+        }); 
       });
 
       session.on('exec', (accept, reject, info) => {
@@ -362,21 +215,185 @@ new ssh2.Server({
       });
 
       session.on('close', (accept, reject, info) => {
-        console.log('close');
+        console.log('close session');
       });
-    });
-  });
 
-  client.on('end', () => {
-    if (stream !== undefined) {
-      streams.splice(streams.indexOf(stream), 1);
-      usernames.splice(usernames.indexOf(stream.username), 1);
-      if (stream.screen !== undefined) {
-        stream.screen.destroy();
-      }
-      stream.end();
+    });
+
+    client.on('end', () => {
+      console.log('client end');
+      cleanupStream();
+    });
+
+    // Display message only to user
+    function systemMessage(text) {
+      stream.chatlog.add(sm.sysPrompt + text);
     }
-  })
+
+    // Send message to all clients in same room
+    // Pass true into system param if system broadcast
+    function broadcast(message, roomname, system) {
+      try {
+        if (roomname === undefined) {
+          stream.chatlog.add(stream.username + ": " + message);
+          screen.render();
+          return;
+        }
+        var roomStreams = rooms[roomname].streams;
+        for (var i in roomStreams) {
+          var userStream = roomStreams[i];
+          if (system) {
+            userStream.chatlog.add(sm.sysPrompt + message);
+          }
+          else {
+            userStream.chatlog.add(stream.username + ": " + message);
+          }
+          userStream.screen.render();
+        }
+      }
+      catch(e) {
+        console.log(e);
+      }
+    }
+
+    function listRooms() {
+      var outstr = sm.availableRooms;
+        for (var roomname in rooms) {
+          outstr = outstr + "\t" + roomname + " (" + rooms[roomname].streams.length + ")\n";
+        }
+        systemMessage(outstr);
+    }
+
+    function createRoom(roomname) {
+      if (roomname === undefined) {
+        systemMessage(sm.roomnameEmpty);
+      }
+      else if (rooms.hasOwnProperty(roomname)) {
+        systemMessage(sm.roomAlreadyExists);
+      }
+      else if (verifyName(roomname, true)) {
+        rooms[roomname] = {
+          streams: [],
+          usernames: [],
+        };
+        systemMessage(roomname + sm.roomCreated);
+      }
+    }
+
+    function joinRoom(roomname) {
+      if (roomname === undefined) {
+        systemMessage(sm.roomnameEmpty);
+      }
+      else if (!rooms.hasOwnProperty(roomname)) {
+        systemMessage(roomname + sm.invalidChatroom);
+      }
+      else if (stream.roomname === roomname) {
+        systemMessage(sm.alreadyInRoom + roomname);
+      }
+      else {
+        if (stream.roomname !== undefined) {
+          leaveRoom();
+        }
+        stream.roomname = roomname;
+        rooms[roomname].streams.push(stream);
+        rooms[roomname].usernames.push(stream.username);
+        broadcast(stream.username + sm.userEnter, roomname, true);
+        listUsers(roomname);
+        roomTitle.setContent('~' + roomname + '~');
+      }
+    }
+
+    function leaveRoom() {
+      if (stream.roomname === undefined) {
+        systemMessage(sm.notInRoom);
+        return;
+      }
+      var room = rooms[stream.roomname];
+      var roomStreams = room.streams;
+      roomStreams.splice(roomStreams.indexOf(stream), 1);
+      var roomUsers = room.usernames;
+      roomUsers.splice(roomUsers.indexOf(stream.username));
+
+      systemMessage(sm.selfLeave + stream.roomname + "\n");
+      broadcast(stream.username + sm.userLeave, stream.roomname, true);
+      stream.roomname = undefined;
+      roomTitle.setContent(sm.selectRoomTitle);
+    }
+
+    function listUsers(roomname) {
+      if (roomname === undefined || roomname.length < 1) {
+        if (stream.roomname !== undefined) {
+          roomname = stream.roomname;
+        }
+        else {
+          systemMessage(sm.roomnameEmpty);
+          return;
+        }
+      }
+      if (!rooms.hasOwnProperty(roomname)) {
+        systemMessage(roomname + sm.invalidChatroom);
+      }
+      else {
+        var numUsers = rooms[roomname].usernames.length;
+        var userList = rooms[roomname].usernames.join(", ");
+        systemMessage(numUsers + sm.usersInRoom + roomname +
+          (userList.length ? ("\n\t" + userList) : ''));
+      }
+    }
+
+    // Handle chat commands
+    function handleChatCommand(text) {
+      var wordTokens = text.split(' ');
+      if (wordTokens[0].match(/^\/(h|help)$/)) {
+        systemMessage(sm.help);
+      }
+      else if (wordTokens[0].match(/^\/(q|quit)$/)) {
+        if (stream.roomname) {
+          leaveRoom();
+        }
+        systemMessage(sm.bye);
+        stream.end();
+      }
+      else if (wordTokens[0].match(/^\/(r|rooms)$/)) {
+        listRooms();
+      }
+      else if (wordTokens[0].match(/^\/(c|create)$/)) {
+        createRoom(wordTokens[1]);
+      }
+      else if (wordTokens[0].match(/^\/(j|join)$/)) {
+        joinRoom(wordTokens[1]);
+      }
+      else if (wordTokens[0].match(/^\/(u|users)$/)) {
+        listUsers(wordTokens[1]);
+      }
+      else if (wordTokens[0].match(/^\/(l|leave)$/)) {
+        leaveRoom();
+      }
+      else {
+        systemMessage(wordTokens[0] + sm.invalidCommand);
+      }
+    }
+
+    // Handle stream end, especially for non-standard exits
+    function cleanupStream() {
+      if (stream !== undefined) {
+        try {
+          if (stream.roomname) {
+            leaveRoom();
+          }
+          streams.splice(streams.indexOf(stream), 1);
+          usernames.splice(usernames.indexOf(stream.username), 1);
+          if (stream.screen) {
+            stream.screen.destroy();
+          }
+          stream.end();
+        }
+        catch(e) {
+          console.log('cleanup', e);
+        }
+      }
+    }
+  });
 
   // Check that user/chatroom name is valid
   // Pass in true to chatroom parameter if checking chatroom name
