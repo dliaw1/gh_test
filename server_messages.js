@@ -10,6 +10,7 @@ module.exports = {
 		  "\t/quit - Log off\n" +
 		  "\t/help - Display help",
 	bye: "BYE",
+	windowTitle: "GH Chat - ",
 
 	// Username messages
 	welcomeUser: "Welcome, ",
@@ -31,13 +32,13 @@ module.exports = {
 	// Error messages
 	invalidCharsInName: "Only alphanumerics, dashes, underscores, and periods are allowed\n",
 	blankNameEntry: "Please enter a valid name\n",
-	nameEntryTooLong: "Names cannot be longer than 31 characters\n",
+	nameEntryTooLong: "Names cannot be longer than 15 characters\n",
 	usernameTaken: "Sorry, name taken\n",
 	invalidChatroom: " is not a valid chatroom name",
 	roomAlreadyExists: "Room already exists",
 	invalidUsername: " is not a valid username",
 	roomnameEmpty: "No chatroom name provided",
-	alreadyInRoom: "You are already in the room",
+	alreadyInRoom: "You are already in ",
 	notInRoom: "You are not currently in a room",
 	invalidCommand: " is not a valid command",
 };

@@ -65,15 +65,16 @@ new ssh2.Server({
         }
       });
 
-      // Update ptty info on client window resize
+      // Handle window resize
       session.on('window-change', (accept, reject, info) => {
         for (var k in info) {
           ttyInfo[k] = info[k];
         }
         if (stream !== undefined) {
           stream.rows = ttyInfo.rows;
-          stream.cols = ttyInfo.cols;
+          stream.columns = ttyInfo.cols;
           stream.term = ttyInfo.term;
+          stream.emit('resize');
         }
         if (accept) {
           accept();
@@ -107,7 +108,7 @@ new ssh2.Server({
         var screen = new blessed.screen({
           autoPadding: true,
           smartCSR: true,
-          title: 'GH Chat',
+          title: sm.windowTitle + stream.username,
           input: stream,
           output: stream,
           terminal: ttyInfo.term,
@@ -142,10 +143,7 @@ new ssh2.Server({
           },
           scrollable: true,
           alwaysScroll: true,
-          scrollbar: {
-            fg: 'blue'
-          },
-          mouse: true,
+          scrollOnInput: true
         });
 
         var chatInput = new blessed.textbox({
@@ -169,6 +167,15 @@ new ssh2.Server({
         listRooms();
         screen.render();
 
+        chatInput.key(['pagedown', 'pageup'], (ch, key) => {
+          if (key.name === 'pageup') {
+            chatlog.scroll(-10);
+          }
+          else if (key.name === 'pagedown') {
+            chatlog.scroll(10);
+          }
+        });
+
         chatInput.on('submit', (line) => {
           chatInput.clearValue();
           chatInput.focus();
@@ -187,6 +194,8 @@ new ssh2.Server({
         });
 
         stream.on('close', () => {
+          streams.splice(streams.indexOf(stream), 1);
+          usernames.splice(usernames.indexOf(stream.username), 1);
           screen.destroy();
         });
 
@@ -207,7 +216,12 @@ new ssh2.Server({
             var roomStreams = rooms[roomname].streams;
             for (var i in roomStreams) {
               var userStream = roomStreams[i];
-              userStream.chatlog.add(stream.username + ": " + message);
+              if (system) {
+                userStream.chatlog.add(sm.sysPrompt + message);
+              }
+              else {
+                userStream.chatlog.add(stream.username + ": " + message);
+              }
               userStream.screen.render();
             }
           }
@@ -248,9 +262,12 @@ new ssh2.Server({
             systemMessage(roomname + sm.invalidChatroom);
           }
           else if (stream.roomname === roomname) {
-            systemMessage(sm.alreadyInRoom);
+            systemMessage(sm.alreadyInRoom + roomname);
           }
           else {
+            if (stream.roomname !== undefined) {
+              leaveRoom();
+            }
             stream.roomname = roomname;
             rooms[roomname].streams.push(stream);
             rooms[roomname].usernames.push(stream.username);
@@ -294,7 +311,7 @@ new ssh2.Server({
             var numUsers = rooms[roomname].usernames.length;
             var userList = rooms[roomname].usernames.join(", ");
             systemMessage(numUsers + sm.usersInRoom + roomname +
-              (userList.length ? ("\n" + userList) : ''));
+              (userList.length ? ("\n\t" + userList) : ''));
           }
         }
 
@@ -354,6 +371,9 @@ new ssh2.Server({
     if (stream !== undefined) {
       streams.splice(streams.indexOf(stream), 1);
       usernames.splice(usernames.indexOf(stream.username), 1);
+      if (stream.screen !== undefined) {
+        stream.screen.destroy();
+      }
       stream.end();
     }
   })
