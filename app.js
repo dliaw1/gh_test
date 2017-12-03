@@ -3,7 +3,14 @@ const ssh2 = require('ssh2');
 const blessed = require('blessed');
 
 const sm = require('./server_messages.js');
+const emotes = require('./emotes.js');
 var rooms = require('./default_rooms.js');
+
+var colors = {aqua: "#000fff", blue: "#0000ff", fuchsia: "#ff00ff",
+              green: "#008000", lime: "#00ff00", maroon: "#800000", navy: "#000080",
+              olive: "#808000", purple: "#800080", red: "#ff0000", silver: "#c0c0c0",
+              teal: "#008080", white: "#fff", yellow: "yellow"};
+var colorNames = Object.keys(colors);
 
 // Chat users
 var streams = [];
@@ -103,99 +110,8 @@ new ssh2.Server({
 
       session.on('shell', (accept, reject) => {
         stream = accept();
-        stream.username = client.username;
-        stream.columns = ttyInfo.cols;
-        stream.rows = ttyInfo.rows;
-        stream.isTTY = true;
-        streams.push(stream);
-
-        screen = new blessed.screen({
-          autoPadding: true,
-          smartCSR: true,
-          title: sm.windowTitle + stream.username,
-          input: stream,
-          output: stream,
-          terminal: ttyInfo.term,
-          cursor: {
-            artificial: true,
-            color: 'black',
-            shape: 'line',
-            blink: true
-          }
-        });
-
-        roomTitle = new blessed.box({
-          screen: screen,
-          top: 0,
-          height: 1,
-          width: '100%',
-          bg: 'blue',
-          fg: 'white',
-          content: sm.selectRoomTitle,
-          align: 'center'
-        });
-
-        chatlog = new blessed.log({
-          screen: screen,
-          top: 1,
-          left: 0,
-          bottom: 1,
-          width: '100%',
-          border: {
-            type: 'line',
-            fg: 'white'
-          },
-          scrollable: true,
-          alwaysScroll: true,
-          scrollOnInput: true
-        });
-
-        chatInput = new blessed.textbox({
-          screen: screen,
-          bottom: 0,
-          height: 1,
-          width: '100%',
-          padding: 0,
-          bg: 'white',
-          fg: 'black',
-          inputOnFocus: true
-        });
-
-        stream.chatlog = chatlog;
-        stream.screen = screen;
-        screen.append(roomTitle);
-        screen.append(chatlog);
-        screen.append(chatInput);
-        chatInput.focus();
-        systemMessage(sm.welcome);
-        listRooms();
-        screen.render();
-
-        chatInput.key(['pagedown', 'pageup'], (ch, key) => {
-          if (key.name === 'pageup') {
-            chatlog.scroll(-10);
-          }
-          else if (key.name === 'pagedown') {
-            chatlog.scroll(10);
-          }
-        });
-
-        chatInput.on('submit', (line) => {
-          chatInput.clearValue();
-          chatInput.focus();
-          line = line.trim().replace(/\s+/g, ' ');
-          if (!line || line.length === 0) {
-            return;
-          }  
-          if (line[0] === '/') {
-            handleChatCommand(line);
-            return;
-          }
-          else {
-            broadcast(line, stream.roomname);
-          }
-          screen.render();
-        });
+        setupStream();
+        setupScreen();
 
         stream.on('close', () => {
           console.log('stream close');
@@ -235,7 +151,7 @@ new ssh2.Server({
     function broadcast(message, roomname, system) {
       try {
         if (roomname === undefined) {
-          stream.chatlog.add(stream.username + ": " + message);
+          stream.chatlog.add(stream.pName + ": " + message);
           screen.render();
           return;
         }
@@ -246,7 +162,7 @@ new ssh2.Server({
             userStream.chatlog.add(sm.sysPrompt + message);
           }
           else {
-            userStream.chatlog.add(stream.username + ": " + message);
+            userStream.chatlog.add(stream.pName + ": " + message);
           }
           userStream.screen.render();
         }
@@ -297,7 +213,7 @@ new ssh2.Server({
         stream.roomname = roomname;
         rooms[roomname].streams.push(stream);
         rooms[roomname].usernames.push(stream.username);
-        broadcast(stream.username + sm.userEnter, roomname, true);
+        broadcast(stream.pName + sm.userEnter, roomname, true);
         listUsers(roomname);
         roomTitle.setContent('~' + roomname + '~');
       }
@@ -315,7 +231,7 @@ new ssh2.Server({
       roomUsers.splice(roomUsers.indexOf(stream.username));
 
       systemMessage(sm.selfLeave + stream.roomname + "\n");
-      broadcast(stream.username + sm.userLeave, stream.roomname, true);
+      broadcast(stream.pName + sm.userLeave, stream.roomname, true);
       stream.roomname = undefined;
       roomTitle.setContent(sm.selectRoomTitle);
     }
@@ -352,6 +268,7 @@ new ssh2.Server({
           leaveRoom();
         }
         systemMessage(sm.bye);
+        screen.render();
         stream.end();
       }
       else if (wordTokens[0].match(/^\/(r|rooms)$/)) {
@@ -374,6 +291,152 @@ new ssh2.Server({
       }
     }
 
+    function handleEmote(text) {
+      var wordTokens = text.split(' ');
+      var emoteCmd = wordTokens[0].substring(1) // Assume first char is '!'
+      if (emotes.hasOwnProperty(emoteCmd)) {
+        broadcast('\n' + emotes[emoteCmd], stream.roomname);
+      }
+    }
+
+    // Build screen elements and initial display
+    function setupScreen() {
+      screen = new blessed.screen({
+          autoPadding: true,
+          smartCSR: true,
+          title: sm.windowTitle + stream.username,
+          input: stream,
+          output: stream,
+          terminal: ttyInfo.term,
+          cursor: {
+            artificial: true,
+            color: 'black',
+            shape: 'line',
+            blink: true
+          },
+          bg: 'black'
+        });
+
+        roomTitle = new blessed.box({
+          screen: screen,
+          top: 0,
+          height: 1,
+          width: '100%',
+          bg: 'blue',
+          fg: 'white',
+          content: sm.selectRoomTitle,
+          align: 'center'
+        });
+
+        chatlog = new blessed.log({
+          screen: screen,
+          top: 1,
+          left: 0,
+          bottom: 1,
+          width: '100%',
+          border: {
+            type: 'line',
+            fg: 'white'
+          },
+          scrollable: true,
+          alwaysScroll: true,
+          scrollOnInput: true,
+          tags: true
+        });
+
+        chatInput = new blessed.textbox({
+          screen: screen,
+          bottom: 0,
+          height: 1,
+          width: '100%',
+          padding: 0,
+          bg: 'white',
+          fg: 'black',
+          inputOnFocus: true
+        });
+
+        var emoteBackground = new blessed.image({
+          screen: screen,
+          parent: screen,
+          top: 1,
+          left: 0,
+          bottom: 1,
+          type: 'ansi',
+          height: '100%',
+          width: '100%',
+          file: __dirname + '/my-program-icon.png'
+        });
+
+        stream.chatlog = chatlog;
+        stream.screen = screen;
+        screen.append(roomTitle);
+        screen.append(chatlog);
+        screen.append(chatInput);
+        setupKeyEvents()
+        chatInput.focus();
+        systemMessage(sm.welcome);
+        listRooms();
+        screen.render();
+    }
+
+    // Keyboard event listeners
+    function setupKeyEvents() {
+      chatInput.key(['pagedown', 'pageup', 'C-c'], (ch, key) => {
+          if (key.name === 'pageup') {
+            chatlog.scroll(-1);
+          }
+          else if (key.name === 'pagedown') {
+            chatlog.scroll(1);
+          }
+          else {
+            if (stream.roomname) {
+              leaveRoom();
+            }
+            systemMessage(sm.bye);
+            screen.render();
+            stream.end();
+          }
+        });
+
+        chatInput.on('submit', (line) => {
+          chatInput.clearValue();
+          chatInput.focus();
+          line = line.trim().replace(/\s+/g, ' ');
+          if (!line || line.length === 0) {
+            return;
+          }  
+          if (line[0] === '/') {
+            handleChatCommand(line);
+            return;
+          }
+          else if (line[0] === '!') {
+            handleEmote(line);
+            return;
+          }
+          else {
+            broadcast(line, stream.roomname);
+          }
+          screen.render();
+        });
+    }
+
+    function setupStream() {
+      if (stream !== undefined) {
+        stream.username = client.username;
+
+        // Randomly assign user a color
+        var randColor = colorNames[Math.floor(Math.random() * colorNames.length)];
+        setUserColor(randColor);
+
+        // PTTY things
+        stream.columns = ttyInfo.cols;
+        stream.rows = ttyInfo.rows;
+        stream.isTTY = true;
+
+        streams.push(stream);
+      }
+    }
+
     // Handle stream end, especially for non-standard exits
     function cleanupStream() {
       if (stream !== undefined) {
@@ -389,9 +452,22 @@ new ssh2.Server({
           stream.end();
         }
         catch(e) {
-          console.log('cleanup', e);
+          console.log('cleanup error', e);
         }
       }
+    }
+
+    function setUserColor(color) {
+      if (color === undefined ||
+          color.length < 1 ||
+          colorNames.indexOf(color) === -1) {
+        return;
+      }
+
+      stream.color = colors[color];
+      stream.pName = "{" + stream.color + "-fg}" +
+                     stream.username +
+                     "{/}";
     }
   });
 
