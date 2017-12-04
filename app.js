@@ -39,14 +39,7 @@ new ssh2.Server({
     ctx.prompt(sm.usernamePrompt, namePrompt);
 
     function namePrompt(input) {
-      try {
-        var name = input[0];
-      }
-      catch(e) {
-        console.log(e);
-        ctx.reject();
-        return;
-      }
+      var name = input[0];
       var validation = verifyName(name, false);
       if (!validation.isValidName) {
         ctx.prompt(validation.err + "\n" + sm.usernamePrompt, namePrompt);
@@ -133,7 +126,7 @@ new ssh2.Server({
       });
 
       session.on('close', (accept, reject, info) => {
-        console.log('close session');
+        console.log('session close');
       });
 
     });
@@ -199,17 +192,15 @@ new ssh2.Server({
         }
       }
       catch(e) {
-        console.log(e);
+        console.log("broadcast", e);
       }
     }
 
     function listRooms() {
       var outstr = sm.availableRooms;
-      var i = 1;
       for (var roomname in rooms) {
-        outstr = outstr + "\t" + i + ". " + roomname + 
+        outstr = outstr + "\t" + roomname + 
                  " (" + rooms[roomname].streams.length + ")\n";
-        i++;
       }
       systemMessage(outstr);
     }
@@ -300,7 +291,7 @@ new ssh2.Server({
 
     // Handle chat commands
     function handleChatCommand(text) {
-      var wordTokens = text.split(' ');
+      var wordTokens = text.split(" ");
       if (wordTokens[0].match(/^\/(h|help)$/)) {
         systemMessage(sm.help);
       }
@@ -328,7 +319,7 @@ new ssh2.Server({
         setUserColor(wordTokens[1]);
       }
       else if (wordTokens[0].match(/^\/(w|whisper)$/)) {
-        broadcast(wordTokens.slice(2).join(" "), 'user', wordTokens[1]);
+        broadcast(wordTokens.slice(2).join(" "), "user", wordTokens[1]);
       }
       else if (wordTokens[0].match(/^\/(l|leave)$/)) {
         leaveRoom();
@@ -339,10 +330,10 @@ new ssh2.Server({
     }
 
     function handleEmote(text) {
-      var wordTokens = text.split(' ');
+      var wordTokens = text.split(" ");
       var emoteCmd = wordTokens[0].substring(1) // Assume first char is '!'
       if (emotes.hasOwnProperty(emoteCmd)) {
-        broadcast('\n' + emotes[emoteCmd], 'room', stream.roomname);
+        broadcast("\n" + emotes[emoteCmd], "room", stream.roomname);
       }
     }
 
@@ -402,18 +393,6 @@ new ssh2.Server({
           inputOnFocus: true
         });
 
-        var emoteBackground = new blessed.image({
-          screen: screen,
-          parent: screen,
-          top: 1,
-          left: 0,
-          bottom: 1,
-          type: 'ansi',
-          height: '100%',
-          width: '100%',
-          file: __dirname + '/my-program-icon.png'
-        });
-
         stream.chatlog = chatlog;
         stream.screen = screen;
         screen.append(roomTitle);
@@ -433,48 +412,135 @@ new ssh2.Server({
 
     // Keyboard event listeners
     function setupKeyEvents() {
-      chatInput.key(['pagedown', 'pageup', 'C-c'], (ch, key) => {
-          if (key.name === 'pageup') {
+      chatInput.key(["pagedown", "pageup", "tab", "C-c"], (ch, key) => {
+        switch(key.name) {
+          case "pageup":
             chatlog.scroll(-1);
-          }
-          else if (key.name === 'pagedown') {
+            break;
+          case "pagedown":
             chatlog.scroll(1);
-          }
-          else {
+            break;
+          case "tab":
+            autoComplete();
+            break;
+          default:
             if (stream.roomname) {
               leaveRoom();
             }
             systemMessage(sm.bye);
             screen.render();
             stream.end();
-          }
-        });
+        }
+      });
 
-        chatInput.on('submit', (line) => {
-          chatInput.clearValue();
-          chatInput.focus();
-          line = line.trim().replace(/\s+/g, ' ');
-          if (!line || line.length === 0) {
-            return;
-          }  
-          if (line[0] === '/') {
-            handleChatCommand(line);
-            return;
-          }
-          else if (line[0] === '!') {
-            handleEmote(line);
-            return;
-          }
+      chatInput.on("submit", (line) => {
+        chatInput.clearValue();
+        chatInput.focus();
+        line = line.trim().replace(/\s+/g, " ");
+        if (!line || line.length === 0) {
+          return;
+        }  
+        if (line[0] === "/") {
+          handleChatCommand(line);
+          return;
+        }
+        else if (line[0] === "!") {
+          handleEmote(line);
+          return;
+        }
+        else {
+          if (stream.roomname !== undefined) {
+            broadcast(line, 'room', stream.roomname);
+          } 
           else {
-            if (stream.roomname !== undefined) {
-              broadcast(line, 'room', stream.roomname);
-            } 
-            else {
-              stream.chatlog.add(stream.pName + ": " + line);
+            stream.chatlog.add(stream.pName + ": " + line);
+          }
+        }
+        screen.render();
+      });
+
+      function autoComplete() {
+        var line = chatInput.getValue();
+        line = line.trim().replace(/\s+/g, " ");
+        var wordTokens = line.split(" ");
+        var completedLine;
+        var nameCandidate;
+        
+        // Command autocomplete
+        if (line[0] === "/") {
+          if (wordTokens.length !== 2) {
+            return;
+          }
+
+          // Match roomname for /join and /users
+          if (wordTokens[0].match(/^\/(j|join)$/) ||
+              wordTokens[0].match(/^\/(u|users)$/)) {
+            nameCandidate = completeWord(wordTokens[1], "room");
+          }
+          // Match username for /whisper
+          else if (wordTokens[0].match(/^\/(w|whisper)$/)) {
+            nameCandidate = completeWord(wordTokens[1], "user")
+          }
+
+          if (nameCandidate) {
+            completedLine = wordTokens[0] + " " + nameCandidate;
+          }
+        }
+        // Emote autocomplete
+        else if (line[0] === "!") {
+          if (wordTokens.length === 1 && wordTokens[0].length > 1) {
+            nameCandidate = completeWord(wordTokens[0], "emote");
+          }
+
+          if (nameCandidate) {
+            completedLine = "!" + nameCandidate;
+          }
+        }
+
+        if (completedLine) {
+          chatInput.setValue(completedLine);
+        }
+      }
+
+      // type - "room", "user", or "emote"
+      function completeWord(nameFragment, type) {
+        var nameCandidate;
+        var nameList;
+
+        switch(type) {
+          case "room":
+            nameList = Object.keys(rooms);
+            break;
+          case "user":
+            nameList = usernames;
+            break;
+          case "emote":
+            nameList = Object.keys(emotes);
+            nameFragment = nameFragment.substring(1);
+            break;
+          default:
+            return;
+        }
+
+        try {
+          for (var i in nameList) {
+            if (nameList[i].indexOf(nameFragment) === 0 &&
+              nameList[i] > nameFragment) {
+              if (!nameCandidate) {
+                nameCandidate = nameList[i];
+              }
+              else if (nameCandidate > nameList[i]) {
+                nameCandidate = nameList[i];
+              }
             }
           }
-          screen.render();
-        });
+        }
+        catch(e) {
+          console.log('completeWord', e);
+        }
+
+        return nameCandidate;
+      }
     }
 
     function setupStream() {
@@ -505,7 +571,7 @@ new ssh2.Server({
           stream.end();
         }
         catch(e) {
-          console.log('cleanup error', e);
+          console.log('cleanupStream', e);
         }
       }
     }
