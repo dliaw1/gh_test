@@ -20,7 +20,7 @@ module.exports = {
 	lobby: "*** Lobby ***",
 	availableRooms: "Available rooms:\n",
 	roomCreated: " has been created",
-	selfEnter: "Entering chatroom: ",
+	selfEnter: "***** Entering chatroom: ",
 	userEnter: " has entered the room",
 	userLeave: " has left the room",
 	selfLeave: "You have left ",

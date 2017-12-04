@@ -168,9 +168,8 @@ new ssh2.Server({
               userStream.chatlog.add(sm.sysPrompt + message);
             }
             else {
-              userStream.chatlog.add(stream.pName + ": " + message);
+              userStream.chatlog.add(name + "-" + stream.pName + ": " + message);
             }
-            userStream.screen.render();
           }
         }
         // Whisper to single user
@@ -194,8 +193,8 @@ new ssh2.Server({
           // Get target stream and push message
           for (var s in streams) {
             if (streams[s].username === name) {
-              streams[s].chatlog.add(stream.pName + " (whisper): " + message);
-              stream.chatlog.add("whisper->" + streams[s].pName + ": " + message);
+              streams[s].chatlog.add("/w from " + stream.pName + ": " + message);
+              stream.chatlog.add("/w to " + streams[s].pName + ": " + message);
               break;
             }
           }
@@ -259,7 +258,7 @@ new ssh2.Server({
           leaveRoom();
         }
         stream.roomname = roomname;
-        stream.chatlog.add(sm.selfEnter + roomname);
+        stream.chatlog.add(sm.selfEnter + roomname + " *****");
         broadcast(stream.pName + sm.userEnter, 'room', roomname, true);
         rooms[roomname].streams.push(stream);
         rooms[roomname].usernames.push(stream.username);
@@ -429,7 +428,6 @@ new ssh2.Server({
         setUserColor(randColor);
 
         listRooms();
-        screen.render();
     }
 
     // Keyboard event listeners
@@ -465,7 +463,6 @@ new ssh2.Server({
           leaveRoom(); 
         } 
         systemMessage(sm.bye); 
-        screen.render(); 
         stream.end(); 
       });
       
@@ -493,7 +490,6 @@ new ssh2.Server({
             stream.chatlog.add(stream.pName + ": " + line);
           }
         }
-        screen.render();
       });
 
       // Maintain focus on textbox at all times
@@ -541,7 +537,7 @@ new ssh2.Server({
         }
 
         if (completedLine) {
-          chatInput.setValue(completedLine);
+          chatInput.setValue(completedLine + " ");
         }
       }
 
