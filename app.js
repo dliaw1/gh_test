@@ -9,9 +9,9 @@ const emotes = require('./emotes.js');
 var rooms = require('./default_rooms.js');
 
 // Yellow is because the hex code keeps displaying as gray for some reason
-var colors = {aqua: "#000fff", blue: "#0000ff", fuchsia: "#ff00ff",
-              green: "#008000", lime: "#00ff00", maroon: "#800000", navy: "#000080",
-              olive: "#808000", purple: "#800080", red: "#ff0000", silver: "#c0c0c0",
+var colors = {aqua: "#000fff", blue: "#0084ff", fuchsia: "#ff00ff",
+              green: "#008000", lime: "#00ff00", maroon: "#800000",
+              olive: "#808000", purple: "#800080", red: "#ff0000",
               teal: "#008080", white: "#fff", yellow: "yellow"};
 var colorNames = Object.keys(colors);
 
@@ -28,14 +28,15 @@ new ssh2.Server({
   var stream;
 
   client.on('authentication', (ctx) => {
-    // Force keyboard auth to do custom checks
+    // Force keyboard auth to do custom checks.
+    // This may require users to enter name twice if client
+    // terminal automatically gives them a login prompt
     if (ctx.method !== 'keyboard-interactive') {
       return ctx.reject(['keyboard-interactive']);
     }
 
     var username;
 
-    // Prompt for username until satisfied
     // Don't use ctx.username in case client automatically
     // passes in local system username
     ctx.prompt(sm.usernamePrompt, namePrompt);
@@ -143,7 +144,7 @@ new ssh2.Server({
       stream.chatlog.add(sm.sysPrompt + text);
     }
 
-    // Send message to all clients in same room
+    // Send message to all clients in a room, or to individual user
     // type - 'room' or 'user'
     // name - chatroom or username
     // system - true if system broadcast
@@ -157,6 +158,8 @@ new ssh2.Server({
             stream.chatlog.add(stream.pName + ": " + message);
             return;
           }
+
+          // Push message to all streams in room
           var roomStreams = rooms[name].streams;
           for (var i in roomStreams) {
             var userStream = roomStreams[i];
@@ -169,6 +172,7 @@ new ssh2.Server({
             userStream.screen.render();
           }
         }
+        // Whisper to single user
         else if (type === 'user') {
           if (name === undefined) {
             systemMessage(sm.blankNameEntry);
@@ -181,10 +185,12 @@ new ssh2.Server({
           if (message === undefined || message.length < 1) {
             return;
           }
+          // Whisper to self
           else if (name === stream.username) {
             stream.chatlog.add(stream.pName + ": " + message);
             return;
           }
+          // Get target stream and push message
           for (var s in streams) {
             if (streams[s].username === name) {
               streams[s].chatlog.add(stream.pName + " (whisper): " + message);
@@ -202,6 +208,7 @@ new ssh2.Server({
       }
     }
 
+    // List all existing rooms, plus number of users in each
     function listRooms() {
       var outstr = sm.availableRooms;
       for (var roomname in rooms) {
@@ -211,6 +218,7 @@ new ssh2.Server({
       systemMessage(outstr);
     }
 
+    // Create a new empty chatroom
     function createRoom(roomname) {
       if (roomname === undefined) {
         systemMessage(sm.roomnameEmpty);
@@ -233,6 +241,7 @@ new ssh2.Server({
       }
     }
 
+    // Join existing chatroom
     function joinRoom(roomname) {
       if (roomname === undefined) {
         systemMessage(sm.roomnameEmpty);
@@ -244,6 +253,7 @@ new ssh2.Server({
         systemMessage(sm.alreadyInRoom + roomname);
       }
       else {
+        // If already in a room, leave before joining new one
         if (stream.roomname !== undefined) {
           leaveRoom();
         }
@@ -257,6 +267,7 @@ new ssh2.Server({
       }
     }
 
+    // Leave current chatroom
     function leaveRoom() {
       if (stream.roomname === undefined) {
         systemMessage(sm.notInRoom);
@@ -266,7 +277,7 @@ new ssh2.Server({
       var roomStreams = room.streams;
       roomStreams.splice(roomStreams.indexOf(stream), 1);
       var roomUsers = room.usernames;
-      roomUsers.splice(roomUsers.indexOf(stream.username));
+      roomUsers.splice(roomUsers.indexOf(stream.username), 1);
 
       systemMessage(sm.selfLeave + stream.roomname + "\n");
       broadcast(stream.pName + sm.userLeave, 'room', stream.roomname, true);
@@ -274,6 +285,8 @@ new ssh2.Server({
       roomTitle.setContent(sm.selectRoomTitle);
     }
 
+    // List all users in specified chatroom
+    // If no room passed in, list users in current chatroom
     function listUsers(roomname) {
       if (roomname === undefined || roomname.length < 1) {
         if (stream.roomname !== undefined) {
@@ -306,7 +319,6 @@ new ssh2.Server({
           leaveRoom();
         }
         systemMessage(sm.bye);
-        screen.render();
         stream.end();
       }
       else if (wordTokens[0].match(/^\/(rooms)$/)) {
@@ -335,9 +347,10 @@ new ssh2.Server({
       }
     }
 
+    // Display an emote
     function handleEmote(text) {
       var wordTokens = text.split(" ");
-      var emoteCmd = wordTokens[0].substring(1) // Assume first char is '!'
+      var emoteCmd = wordTokens[0].substring(1); // Assume first char is '!'
       if (emotes.hasOwnProperty(emoteCmd)) {
         broadcast("\n" + emotes[emoteCmd], "room", stream.roomname);
       }
@@ -358,7 +371,8 @@ new ssh2.Server({
             shape: 'line',
             blink: true
           },
-          bg: 'black'
+          bg: 'black',
+          fg: 'white'
         });
 
         roomTitle = new blessed.box({
@@ -385,7 +399,8 @@ new ssh2.Server({
           scrollable: true,
           alwaysScroll: true,
           scrollOnInput: true,
-          tags: true
+          tags: true,
+          fg: 'white'
         });
 
         chatInput = new blessed.textbox({
@@ -418,27 +433,42 @@ new ssh2.Server({
 
     // Keyboard event listeners
     function setupKeyEvents() {
-      chatInput.key(["pagedown", "pageup", "tab", "C-c"], (ch, key) => {
+      // Chat scrolling
+      chatInput.key(["pagedown", "pageup", "home", "end", "C-c"], (ch, key) => {
         switch(key.name) {
           case "pageup":
-            chatlog.scroll(-8);
+            chatlog.scroll(-10);
             break;
           case "pagedown":
-            chatlog.scroll(8);
+            chatlog.scroll(10);
             break;
-          case "tab":
-            autoComplete();
+          case "home":
+            chatlog.setScrollPerc(0);
+            break;
+          case "end":
+            chatlog.setScrollPerc(100);
             break;
           default:
-            if (stream.roomname) {
-              leaveRoom();
-            }
-            systemMessage(sm.bye);
-            screen.render();
-            stream.end();
+            //console.log("wrongkey");
         }
       });
 
+      // Autocompleting room/usernames
+      chatInput.key("tab", (ch, key) => {
+        autoComplete();
+      });
+
+      // Quit on Ctrl-C
+      chatInput.key("C-c", (ch, key) => {
+        if (stream.roomname) { 
+          leaveRoom(); 
+        } 
+        systemMessage(sm.bye); 
+        screen.render(); 
+        stream.end(); 
+      });
+      
+      // Handle submitted input
       chatInput.on("submit", (line) => {
         chatInput.clearValue();
         chatInput.focus();
@@ -465,6 +495,12 @@ new ssh2.Server({
         screen.render();
       });
 
+      // Maintain focus on textbox at all times
+      chatInput.on("cancel", () => {
+        chatInput.focus();
+      });
+
+      // Autocomplete room/usernames and emotes
       function autoComplete() {
         var line = chatInput.getValue();
         line = line.trim().replace(/\s+/g, " ");
@@ -508,6 +544,7 @@ new ssh2.Server({
         }
       }
 
+      // Find closest matching non-identical room/username or emote
       // type - "room", "user", or "emote"
       function completeWord(nameFragment, type) {
         var nameCandidate;
@@ -549,6 +586,7 @@ new ssh2.Server({
       }
     }
 
+    // Basic stream setup
     function setupStream() {
       if (stream !== undefined) {
         stream.username = client.username;
@@ -582,6 +620,8 @@ new ssh2.Server({
       }
     }
 
+    // Set username color
+    // Print list of valid colors if no/invalid color passed in
     function setUserColor(colorName) {
       if (colorName === undefined ||
           colorName.length < 1 ||
@@ -599,6 +639,7 @@ new ssh2.Server({
     }
   });
 
+  // Wrap text in tags to render in color
   // color = actual color value, not the color name
   function wrapColorText(color, text) {
     if (color === undefined || color.length < 1) {
