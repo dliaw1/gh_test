@@ -148,10 +148,14 @@ new ssh2.Server({
     function broadcast(message, type, name, system) {
       try {
         if (type === 'room') {
-          var roomStreams = rooms[name].streams;
           if (message === undefined || message.length < 1) {
             return;
           }
+          if (name === undefined || !rooms.hasOwnProperty(name)) {
+            stream.chatlog.add(stream.pName + ": " + message);
+            return;
+          }
+          var roomStreams = rooms[name].streams;
           for (var i in roomStreams) {
             var userStream = roomStreams[i];
             if (system) {
@@ -415,10 +419,10 @@ new ssh2.Server({
       chatInput.key(["pagedown", "pageup", "tab", "C-c"], (ch, key) => {
         switch(key.name) {
           case "pageup":
-            chatlog.scroll(-1);
+            chatlog.scroll(-8);
             break;
           case "pagedown":
-            chatlog.scroll(1);
+            chatlog.scroll(8);
             break;
           case "tab":
             autoComplete();
