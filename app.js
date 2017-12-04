@@ -1,3 +1,5 @@
+process.env.LANG = 'en_US.UTF-8';
+
 const fs = require('fs');
 const ssh2 = require('ssh2');
 const blessed = require('blessed');
