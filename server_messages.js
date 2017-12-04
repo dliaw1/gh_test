@@ -1,6 +1,8 @@
 module.exports = {
 	// Standard messages
-	welcome: "Welcome to the GungHo test chat server!",
+	welcome: "Welcome to the GungHo test chat server!\n" +
+					 "  Select a room to begin chatting\n" +
+					 "  /h to display help",
 	help: "Available commands:\n" +
 		    "\t/rooms - List available chatrooms\n" +
 		 	  "\t/create - Create new chatroom\n" +
@@ -15,7 +17,7 @@ module.exports = {
 	windowTitle: "GH Chat - ",
 
 	// Chatroom messages
-	selectRoomTitle: "*** Choose a room ***",
+	lobby: "*** Lobby ***",
 	availableRooms: "Available rooms:\n",
 	roomCreated: " has been created",
 	selfEnter: "Entering chatroom: ",

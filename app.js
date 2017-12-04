@@ -13,6 +13,7 @@ var colors = {aqua: "#000fff", blue: "#0084ff", fuchsia: "#ff00ff",
               green: "#008000", lime: "#00ff00", maroon: "#800000",
               olive: "#808000", purple: "#800080", red: "#ff0000",
               teal: "#008080", white: "#fff", yellow: "yellow"};
+var invertColors = ["white", "blue", "lime", "yellow"]
 var colorNames = Object.keys(colors);
 
 // Chat users
@@ -282,7 +283,7 @@ new ssh2.Server({
       systemMessage(sm.selfLeave + stream.roomname + "\n");
       broadcast(stream.pName + sm.userLeave, 'room', stream.roomname, true);
       stream.roomname = undefined;
-      roomTitle.setContent(sm.selectRoomTitle);
+      roomTitle.setContent(sm.lobby);
     }
 
     // List all users in specified chatroom
@@ -382,7 +383,7 @@ new ssh2.Server({
           width: '100%',
           bg: 'blue',
           fg: 'white',
-          content: sm.selectRoomTitle,
+          content: sm.lobby,
           align: 'center'
         });
 
@@ -635,6 +636,8 @@ new ssh2.Server({
 
       stream.color = colors[colorName];
       stream.pName = wrapColorText(stream.color, stream.username);
+      roomTitle.style.bg = stream.color;
+      roomTitle.style.fg = (invertColors.indexOf(colorName) === -1 ? "white" : "black");
       systemMessage(sm.colorSet + wrapColorText(stream.color, colorName));
     }
   });
