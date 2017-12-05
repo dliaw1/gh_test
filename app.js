@@ -389,6 +389,7 @@ new ssh2.Server({
             type: "line",
             fg: "white"
           },
+          scrollbar: true,
           scrollable: true,
           alwaysScroll: true,
           scrollOnInput: true,
@@ -662,6 +663,7 @@ new ssh2.Server({
       stream.pName = wrapColorText(stream.color, stream.username);
       roomTitle.style.bg = stream.color;
       roomTitle.style.fg = (invertColors.indexOf(colorName) === -1 ? "white" : "black");
+      chatlog.style.scrollbar.bg = stream.color;
       systemMessage(sm.colorSet + wrapColorText(stream.color, colorName));
     }
 
