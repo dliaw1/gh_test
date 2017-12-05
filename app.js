@@ -299,38 +299,39 @@ new ssh2.Server({
     // Handle chat commands
     function handleChatCommand(message) {
       var wordTokens = message.split(" ");
-      if (wordTokens[0].match(/^\/(h|help)$/)) {
+      var command = wordTokens[0].toLowerCase();
+      if (command.match(/^\/(h|help)$/)) {
         systemMessage(sm.help);
       }
-      else if (wordTokens[0].match(/^\/(q|quit)$/)) {
+      else if (command.match(/^\/(q|quit)$/)) {
         if (stream.roomname) {
           leaveRoom();
         }
         systemMessage(sm.bye);
         stream.end();
       }
-      else if (wordTokens[0].match(/^\/(rooms)$/)) {
+      else if (command.match(/^\/(r|rooms)$/)) {
         listRooms();
       }
-      else if (wordTokens[0].match(/^\/(c|create)$/)) {
+      else if (command.match(/^\/(c|create)$/)) {
         createRoom(wordTokens[1]);
       }
-      else if (wordTokens[0].match(/^\/(j|join)$/)) {
+      else if (command.match(/^\/(j|join)$/)) {
         joinRoom(wordTokens[1]);
       }
-      else if (wordTokens[0].match(/^\/(u|users)$/)) {
+      else if (command.match(/^\/(u|users)$/)) {
         listUsers(wordTokens[1]);
       }
-      else if (wordTokens[0].match(/^\/(color)$/)) {
+      else if (command.match(/^\/(color)$/)) {
         setUserColor(wordTokens[1]);
       }
-      else if (wordTokens[0].match(/^\/(w|whisper)$/)) {
+      else if (command.match(/^\/(w|whisper)$/)) {
         broadcast(wordTokens.slice(2).join(" "), "user", wordTokens[1]);
       }
-      else if (wordTokens[0].match(/^\/(t|timestamp)$/)) {
+      else if (command.match(/^\/(t|timestamp)$/)) {
         setTimestamp(wordTokens[1]);
       }
-      else if (wordTokens[0].match(/^\/(l|leave)$/)) {
+      else if (command.match(/^\/(l|leave)$/)) {
         leaveRoom();
       }
       else {
@@ -496,25 +497,26 @@ new ssh2.Server({
           if (wordTokens.length !== 2) {
             return;
           }
+          var command = wordTokens[0].toLowerCase();
 
           // Match roomname for /join and /users
-          if (wordTokens[0].match(/^\/(j|join)$/) ||
-              wordTokens[0].match(/^\/(u|users)$/)) {
+          if (command.match(/^\/(j|join)$/) ||
+              command.match(/^\/(u|users)$/)) {
             nameCandidate = completeWord(wordTokens[1], "room");
           }
           // Match username for /whisper
-          else if (wordTokens[0].match(/^\/(w|whisper)$/)) {
+          else if (command.match(/^\/(w|whisper)$/)) {
             nameCandidate = completeWord(wordTokens[1], "user")
           }
 
           if (nameCandidate) {
-            completedLine = wordTokens[0] + " " + nameCandidate;
+            completedLine = command + " " + nameCandidate;
           }
         }
         // Emote autocomplete
         else if (line[0] === "!") {
-          if (wordTokens.length === 1 && wordTokens[0].length > 1) {
-            nameCandidate = completeWord(wordTokens[0], "emote");
+          if (wordTokens.length === 1 && command.length > 1) {
+            nameCandidate = completeWord(command, "emote");
           }
 
           if (nameCandidate) {
