@@ -1,12 +1,14 @@
-process.env.LANG = 'en_US.UTF-8';
+process.env.LANG = "en_US.UTF-8";
 
-const fs = require('fs');
-const ssh2 = require('ssh2');
-const blessed = require('blessed');
+// Libraries
+const fs = require("fs");
+const ssh2 = require("ssh2");
+const blessed = require("blessed");
 
-const sm = require('./server_messages.js');
-const emotes = require('./emotes.js');
-var rooms = require('./default_rooms.js');
+// Datafiles
+const sm = require("./server_messages.js");
+const emotes = require("./emotes.js");
+var rooms = require("./default_rooms.js");
 
 // Yellow is because the hex code keeps displaying as gray for some reason
 var colors = {aqua: "#000fff", blue: "#0084ff", fuchsia: "#ff00ff",
@@ -24,16 +26,16 @@ var MAX_NAME_LENGTH = 15;
 
 var server = 
 new ssh2.Server({
-  hostKeys: [fs.readFileSync('host.key')]
+  hostKeys: [fs.readFileSync("host.key")]
 }, (client) => {
   var stream;
 
-  client.on('authentication', (ctx) => {
+  client.on("authentication", (ctx) => {
     // Force keyboard auth to do custom checks.
     // This may require users to enter name twice if client
     // terminal automatically gives them a login prompt
-    if (ctx.method !== 'keyboard-interactive') {
-      return ctx.reject(['keyboard-interactive']);
+    if (ctx.method !== "keyboard-interactive") {
+      return ctx.reject(["keyboard-interactive"]);
     }
 
     var username;
@@ -57,18 +59,18 @@ new ssh2.Server({
   });
 
   // Begin session
-  client.once('ready', () => {
+  client.once("ready", () => {
     var ttyInfo;
     var screen;
     var roomTitle;
     var chatlog;
     var chatInput;
 
-    client.once('session', (accept, reject) => {
+    client.once("session", (accept, reject) => {
       var session = accept();
       
       // Get initial ptty info
-      session.once('pty', (accept, reject, info) => {
+      session.once("pty", (accept, reject, info) => {
         ttyInfo = info;
         if (accept) {
           accept();
@@ -76,7 +78,7 @@ new ssh2.Server({
       });
 
       // Handle window resize
-      session.on('window-change', (accept, reject, info) => {
+      session.on("window-change", (accept, reject, info) => {
         for (var k in info) {
           ttyInfo[k] = info[k];
         }
@@ -84,79 +86,85 @@ new ssh2.Server({
           stream.rows = ttyInfo.rows;
           stream.columns = ttyInfo.cols;
           stream.term = ttyInfo.term;
-          stream.emit('resize');
+          stream.emit("resize");
         }
         if (accept) {
           accept();
         }
       });
 
-      session.on('x11', (accept, reject, info) => {
-        console.log('x11');
+      session.on("x11", (accept, reject, info) => {
+        console.log("x11");
       });
 
-      session.on('env', (accept, reject, info) => {
-        console.log('env - ', info);
+      session.on("env", (accept, reject, info) => {
+        console.log("env - ", info);
       });
 
-      session.on('signal', (accept, reject, info) => {
-        console.log('signal');
+      session.on("signal", (accept, reject, info) => {
+        console.log("signal");
       });
 
-      session.on('auth-agent', (accept, reject, info) => {
-        console.log('auth-agent');
+      session.on("auth-agent", (accept, reject, info) => {
+        console.log("auth-agent");
       });
 
-      session.on('shell', (accept, reject) => {
+      session.on("shell", (accept, reject) => {
         stream = accept();
         setupStream();
         setupScreen();
 
-        stream.on('close', () => {
-          console.log('stream close');
+        stream.on("close", () => {
+          console.log("stream close");
         }); 
       });
 
-      session.on('exec', (accept, reject, info) => {
-        console.log('exec');
+      session.on("exec", (accept, reject, info) => {
+        console.log("exec");
       });
 
-      session.on('stfp', (accept, reject, info) => {
-        console.log('stfp');
+      session.on("stfp", (accept, reject, info) => {
+        console.log("stfp");
       });
 
-      session.on('subsystem', (accept, reject, info) => {
-        console.log('subsystem');
+      session.on("subsystem", (accept, reject, info) => {
+        console.log("subsystem");
       });
 
-      session.on('close', (accept, reject, info) => {
-        console.log('session close');
+      session.on("close", (accept, reject, info) => {
+        console.log("session close");
       });
 
     });
 
-    client.on('end', () => {
-      console.log('client end');
+    client.on("end", () => {
+      console.log("client end");
       cleanupStream();
     });
 
     // Display message only to user
     function systemMessage(text) {
-      stream.chatlog.add(sm.sysPrompt + text);
+      var sysPrompt = sm.sysPrompt;
+      if (stream.timestamp) {
+        sysPrompt = "(" + new Date().toLocaleTimeString() + ") " + sysPrompt;
+      }
+      stream.chatlog.add(sysPrompt + text);
     }
 
     // Send message to all clients in a room, or to individual user
-    // type - 'room' or 'user'
+    // type - "room" or "user"
     // name - chatroom or username
     // system - true if system broadcast
     function broadcast(message, type, name, system) {
+      var ts = " (" + new Date().toLocaleTimeString() + ")";
+      
       try {
-        if (type === 'room') {
+        if (type === "room") {
           if (message === undefined || message.length < 1) {
             return;
           }
           if (name === undefined || !rooms.hasOwnProperty(name)) {
-            stream.chatlog.add(stream.pName + ": " + message);
+            stream.chatlog.add(stream.pName + (stream.timestamp ? ts : "") + ": " + message);
             return;
           }
 
@@ -165,15 +173,15 @@ new ssh2.Server({
           for (var i in roomStreams) {
             var userStream = roomStreams[i];
             if (system) {
-              userStream.chatlog.add(sm.sysPrompt + message);
+              userStream.chatlog.add((userStream.timestamp ? ts : "") + sm.sysPrompt + message);
             }
             else {
-              userStream.chatlog.add(name + "-" + stream.pName + ": " + message);
+              userStream.chatlog.add("<" + name + ">" + stream.pName + (userStream.timestamp ? ts : "") + ": " + message);
             }
           }
         }
         // Whisper to single user
-        else if (type === 'user') {
+        else if (type === "user") {
           if (name === undefined) {
             systemMessage(sm.blankNameEntry);
             return;
@@ -187,14 +195,14 @@ new ssh2.Server({
           }
           // Whisper to self
           else if (name === stream.username) {
-            stream.chatlog.add(stream.pName + ": " + message);
+            stream.chatlog.add(stream.pName + (stream.timestamp ? ts : "") + ": " + message);
             return;
           }
           // Get target stream and push message
           for (var s in streams) {
             if (streams[s].username === name) {
-              streams[s].chatlog.add("/w from " + stream.pName + ": " + message);
-              stream.chatlog.add("/w to " + streams[s].pName + ": " + message);
+              streams[s].chatlog.add("/w from " + stream.pName + (streams[s].timestamp ? ts : "") + ": " + message);
+              stream.chatlog.add("/w to " + streams[s].pName + (stream.timestamp ? ts : "") + ": " + message);
               break;
             }
           }
@@ -259,11 +267,11 @@ new ssh2.Server({
         }
         stream.roomname = roomname;
         stream.chatlog.add(sm.selfEnter + roomname + " *****");
-        broadcast(stream.pName + sm.userEnter, 'room', roomname, true);
+        broadcast(stream.pName + sm.userEnter, "room", roomname, true);
         rooms[roomname].streams.push(stream);
         rooms[roomname].usernames.push(stream.username);
         listUsers(roomname);
-        roomTitle.setContent('~' + roomname + '~');
+        roomTitle.setContent("~" + roomname + "~");
       }
     }
 
@@ -280,7 +288,7 @@ new ssh2.Server({
       roomUsers.splice(roomUsers.indexOf(stream.username), 1);
 
       systemMessage(sm.selfLeave + stream.roomname + "\n");
-      broadcast(stream.pName + sm.userLeave, 'room', stream.roomname, true);
+      broadcast(stream.pName + sm.userLeave, "room", stream.roomname, true);
       stream.roomname = undefined;
       roomTitle.setContent(sm.lobby);
     }
@@ -304,7 +312,7 @@ new ssh2.Server({
         var numUsers = rooms[roomname].usernames.length;
         var userList = rooms[roomname].streams.map(s => s.pName).join(", ");
         systemMessage(numUsers + sm.usersInRoom + roomname +
-          (userList.length ? ("\n\t" + userList) : ''));
+          (userList.length ? ("\n\t" + userList) : ""));
       }
     }
 
@@ -339,6 +347,9 @@ new ssh2.Server({
       else if (wordTokens[0].match(/^\/(w|whisper)$/)) {
         broadcast(wordTokens.slice(2).join(" "), "user", wordTokens[1]);
       }
+      else if (wordTokens[0].match(/^\/(t|timestamp)$/)) {
+        setTimestamp(wordTokens[1]);
+      }
       else if (wordTokens[0].match(/^\/(l|leave)$/)) {
         leaveRoom();
       }
@@ -350,7 +361,7 @@ new ssh2.Server({
     // Display an emote
     function handleEmote(text) {
       var wordTokens = text.split(" ");
-      var emoteCmd = wordTokens[0].substring(1); // Assume first char is '!'
+      var emoteCmd = wordTokens[0].substring(1); // Assume first char is "!"
       if (emotes.hasOwnProperty(emoteCmd)) {
         broadcast("\n" + emotes[emoteCmd], "room", stream.roomname);
       }
@@ -367,23 +378,23 @@ new ssh2.Server({
           terminal: ttyInfo.term,
           cursor: {
             artificial: true,
-            color: 'black',
-            shape: 'line',
+            color: "black",
+            shape: "line",
             blink: true
           },
-          bg: 'black',
-          fg: 'white'
+          bg: "black",
+          fg: "white"
         });
 
         roomTitle = new blessed.box({
           screen: screen,
           top: 0,
           height: 1,
-          width: '100%',
-          bg: 'blue',
-          fg: 'white',
+          width: "100%",
+          bg: "blue",
+          fg: "white",
           content: sm.lobby,
-          align: 'center'
+          align: "center"
         });
 
         chatlog = new blessed.log({
@@ -391,26 +402,26 @@ new ssh2.Server({
           top: 1,
           left: 0,
           bottom: 1,
-          width: '100%',
+          width: "100%",
           border: {
-            type: 'line',
-            fg: 'white'
+            type: "line",
+            fg: "white"
           },
           scrollable: true,
           alwaysScroll: true,
           scrollOnInput: true,
           tags: true,
-          fg: 'white'
+          fg: "white"
         });
 
         chatInput = new blessed.textbox({
           screen: screen,
           bottom: 0,
           height: 1,
-          width: '100%',
+          width: "100%",
           padding: 0,
-          bg: 'white',
-          fg: 'black',
+          bg: "white",
+          fg: "black",
           inputOnFocus: true
         });
 
@@ -483,12 +494,7 @@ new ssh2.Server({
           return;
         }
         else {
-          if (stream.roomname !== undefined) {
-            broadcast(line, 'room', stream.roomname);
-          } 
-          else {
-            stream.chatlog.add(stream.pName + ": " + line);
-          }
+            broadcast(line, "room", stream.roomname);
         }
       });
 
@@ -576,7 +582,7 @@ new ssh2.Server({
           }
         }
         catch(e) {
-          console.log('completeWord', e);
+          console.log("completeWord", e);
         }
 
         return nameCandidate;
@@ -592,6 +598,9 @@ new ssh2.Server({
         stream.columns = ttyInfo.cols;
         stream.rows = ttyInfo.rows;
         stream.isTTY = true;
+
+        // Disable timestamps by default
+        stream.timestamp = false;
 
         streams.push(stream);
       }
@@ -612,7 +621,7 @@ new ssh2.Server({
           stream.end();
         }
         catch(e) {
-          console.log('cleanupStream', e);
+          console.log("cleanupStream", e);
         }
       }
     }
@@ -636,13 +645,30 @@ new ssh2.Server({
       roomTitle.style.fg = (invertColors.indexOf(colorName) === -1 ? "white" : "black");
       systemMessage(sm.colorSet + wrapColorText(stream.color, colorName));
     }
+
+    // Turn message timestamps on/off
+    function setTimestamp(showTime) {
+      switch(showTime) {
+        case "on":
+          stream.timestamp = true;
+          break;
+        case "off":
+          stream.timestamp = false;
+          break;
+        // Toggle if no/unknown argument given
+        default:
+          stream.timestamp = !stream.timestamp;
+      }
+
+      systemMessage(sm.timestampsSet + (stream.timestamp ? "on" : "off"));
+    }
   });
 
   // Wrap text in tags to render in color
   // color = actual color value, not the color name
   function wrapColorText(color, text) {
     if (color === undefined || color.length < 1) {
-      return text ? text : '';
+      return text ? text : "";
     }
     return "{" + color + "-fg}" + text + "{/}";
   }
@@ -673,11 +699,11 @@ new ssh2.Server({
       isValidName = false;
     }
 
-    return { 'isValidName': isValidName, 'err': message };
+    return { "isValidName": isValidName, "err": message };
   }
 
 });
 
 server.listen(9001, () => {
-  console.log('listening on port 9001');
+  console.log("listening on port 9001");
 });

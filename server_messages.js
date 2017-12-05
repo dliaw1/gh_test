@@ -11,6 +11,7 @@ module.exports = {
 		 	  "\t/leave - Leave current chatroom\n" +
 		 	  "\t/color <color> - Change username display color\n" +
 		 	  "\t/whisper <user> <message> - PM another user\n" +
+		 	  "\t/timestamp <on/off> - Toggle message timestamps\n" +
 		 	  "\t/quit - Log off\n" +
 		 	  "\t/help - Display help",
 	bye: "BYE",
@@ -26,10 +27,10 @@ module.exports = {
 	selfLeave: "You have left ",
 	usersInRoom: " user(s) currently in ",
 
-	// Color messages
+	// Misc command messages
 	validColors: "Valid colors: ",
 	colorSet: "Color set to ",
-
+	timestampsSet: "Timestamps turned ",
 
 	// Prompts
 	usernamePrompt: "Username: ",
