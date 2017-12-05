@@ -24,7 +24,7 @@ module.exports = {
 	selfEnter: "***** Entering chatroom: ",
 	userEnter: " has entered the room",
 	userLeave: " has left the room",
-	selfLeave: "You have left ",
+	selfLeave: "***** You have left ",
 	usersInRoom: " user(s) currently in ",
 
 	// Misc command messages
@@ -36,6 +36,8 @@ module.exports = {
 	usernamePrompt: "Username: ",
 	roomNamePrompt: "Chatroom name: ",
 	sysPrompt: "> ",
+	whisperTo: "/w to ",
+	whisperFrom: "/w from ",
 
 	// Error messages
 	invalidCharsInName: "Only alphanumerics, dashes, underscores, and periods are allowed",

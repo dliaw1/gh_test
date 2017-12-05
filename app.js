@@ -93,46 +93,10 @@ new ssh2.Server({
         }
       });
 
-      session.on("x11", (accept, reject, info) => {
-        console.log("x11");
-      });
-
-      session.on("env", (accept, reject, info) => {
-        console.log("env - ", info);
-      });
-
-      session.on("signal", (accept, reject, info) => {
-        console.log("signal");
-      });
-
-      session.on("auth-agent", (accept, reject, info) => {
-        console.log("auth-agent");
-      });
-
       session.on("shell", (accept, reject) => {
         stream = accept();
         setupStream();
         setupScreen();
-
-        stream.on("close", () => {
-          console.log("stream close");
-        }); 
-      });
-
-      session.on("exec", (accept, reject, info) => {
-        console.log("exec");
-      });
-
-      session.on("stfp", (accept, reject, info) => {
-        console.log("stfp");
-      });
-
-      session.on("subsystem", (accept, reject, info) => {
-        console.log("subsystem");
-      });
-
-      session.on("close", (accept, reject, info) => {
-        console.log("session close");
       });
 
     });
@@ -143,12 +107,12 @@ new ssh2.Server({
     });
 
     // Display message only to user
-    function systemMessage(text) {
+    function systemMessage(message) {
       var sysPrompt = sm.sysPrompt;
       if (stream.timestamp) {
-        sysPrompt = "(" + new Date().toLocaleTimeString() + ") " + sysPrompt;
+        sysPrompt = "(" + new Date().toLocaleTimeString() + ")" + sysPrompt;
       }
-      stream.chatlog.add(sysPrompt + text);
+      stream.chatlog.add(sysPrompt + message);
     }
 
     // Send message to all clients in a room, or to individual user
@@ -156,7 +120,7 @@ new ssh2.Server({
     // name - chatroom or username
     // system - true if system broadcast
     function broadcast(message, type, name, system) {
-      var ts = " (" + new Date().toLocaleTimeString() + ")";
+      var ts = new Date().toLocaleTimeString();
       
       try {
         if (type === "room") {
@@ -164,7 +128,9 @@ new ssh2.Server({
             return;
           }
           if (name === undefined || !rooms.hasOwnProperty(name)) {
-            stream.chatlog.add(stream.pName + (stream.timestamp ? ts : "") + ": " + message);
+            stream.writeLine(message, {
+              type: "self",
+            }, ts);
             return;
           }
 
@@ -173,10 +139,16 @@ new ssh2.Server({
           for (var i in roomStreams) {
             var userStream = roomStreams[i];
             if (system) {
-              userStream.chatlog.add((userStream.timestamp ? ts : "") + sm.sysPrompt + message);
+              userStream.writeLine(message, {
+                type: "system"
+              }, ts);
             }
             else {
-              userStream.chatlog.add("<" + name + ">" + stream.pName + (userStream.timestamp ? ts : "") + ": " + message);
+              userStream.writeLine(message, {
+                type: "room",
+                roomname: name,
+                pName: stream.pName
+              }, ts);
             }
           }
         }
@@ -195,14 +167,22 @@ new ssh2.Server({
           }
           // Whisper to self
           else if (name === stream.username) {
-            stream.chatlog.add(stream.pName + (stream.timestamp ? ts : "") + ": " + message);
+            stream.writeLine(message, {
+              type: "self"
+            }, ts);
             return;
           }
           // Get target stream and push message
           for (var s in streams) {
             if (streams[s].username === name) {
-              streams[s].chatlog.add("/w from " + stream.pName + (streams[s].timestamp ? ts : "") + ": " + message);
-              stream.chatlog.add("/w to " + streams[s].pName + (stream.timestamp ? ts : "") + ": " + message);
+              streams[s].writeLine(message, {
+                type: "user",
+                pName: stream.pName
+              }, ts);
+              stream.writeLine(message, {
+                type: "whisperTo",
+                pName: streams[s].pName
+              }, ts);
               break;
             }
           }
@@ -266,7 +246,7 @@ new ssh2.Server({
           leaveRoom();
         }
         stream.roomname = roomname;
-        stream.chatlog.add(sm.selfEnter + roomname + " *****");
+        systemMessage(sm.selfEnter + roomname + " *****");
         broadcast(stream.pName + sm.userEnter, "room", roomname, true);
         rooms[roomname].streams.push(stream);
         rooms[roomname].usernames.push(stream.username);
@@ -287,7 +267,7 @@ new ssh2.Server({
       var roomUsers = room.usernames;
       roomUsers.splice(roomUsers.indexOf(stream.username), 1);
 
-      systemMessage(sm.selfLeave + stream.roomname + "\n");
+      systemMessage(sm.selfLeave + stream.roomname + "*****");
       broadcast(stream.pName + sm.userLeave, "room", stream.roomname, true);
       stream.roomname = undefined;
       roomTitle.setContent(sm.lobby);
@@ -317,8 +297,8 @@ new ssh2.Server({
     }
 
     // Handle chat commands
-    function handleChatCommand(text) {
-      var wordTokens = text.split(" ");
+    function handleChatCommand(message) {
+      var wordTokens = message.split(" ");
       if (wordTokens[0].match(/^\/(h|help)$/)) {
         systemMessage(sm.help);
       }
@@ -359,8 +339,8 @@ new ssh2.Server({
     }
 
     // Display an emote
-    function handleEmote(text) {
-      var wordTokens = text.split(" ");
+    function handleEmote(message) {
+      var wordTokens = message.split(" ");
       var emoteCmd = wordTokens[0].substring(1); // Assume first char is "!"
       if (emotes.hasOwnProperty(emoteCmd)) {
         broadcast("\n" + emotes[emoteCmd], "room", stream.roomname);
@@ -601,6 +581,42 @@ new ssh2.Server({
 
         // Disable timestamps by default
         stream.timestamp = false;
+
+        // Standard write
+        // origin - object containing type and room/user printname(s)
+        stream.writeLine = function(message, origin, timestamp) {
+          var lineHead;
+          try {
+            var ts = (stream.timestamp && timestamp) ? "(" + timestamp + ")" : "";
+          
+            switch(origin.type) {
+              case "room":
+                lineHead = origin.roomname + ">" +
+                           origin.pName + (ts.length ? " " : "") + ts + ": "
+                break;
+              case "user":
+                lineHead = sm.whisperFrom + origin.pName + 
+                           (ts.length ? " " : "") + ts + ": ";
+              break;
+              case "system":
+                lineHead = ts + sm.sysPrompt;
+                break;
+              case "whisperTo":
+                lineHead = sm.whisperTo + origin.pName +
+                           (ts.length ? " " : "") + ts + ": ";
+                break;
+              // Self
+              default:
+                lineHead = stream.pName + (ts.length ? " " : "") + ts  + ": ";
+                break;
+            }
+
+            stream.chatlog.add(lineHead + message);
+          }
+          catch(e) {
+            console.log("writeLine", e);
+          }
+        }
 
         streams.push(stream);
       }
