@@ -300,6 +300,7 @@ new ssh2.Server({
     function handleChatCommand(message) {
       var wordTokens = message.split(" ");
       var command = wordTokens[0].toLowerCase();
+      
       if (command.match(/^\/(h|help)$/)) {
         systemMessage(sm.help);
       }
@@ -491,13 +492,13 @@ new ssh2.Server({
         var wordTokens = line.split(" ");
         var completedLine;
         var nameCandidate;
+        var command = wordTokens[0].toLowerCase();
         
         // Command autocomplete
         if (line[0] === "/") {
           if (wordTokens.length !== 2) {
             return;
           }
-          var command = wordTokens[0].toLowerCase();
 
           // Match roomname for /join and /users
           if (command.match(/^\/(j|join)$/) ||
