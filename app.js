@@ -341,7 +341,7 @@ new ssh2.Server({
     // Display an emote
     function handleEmote(message) {
       var wordTokens = message.split(" ");
-      var emoteCmd = wordTokens[0].substring(1); // Assume first char is "!"
+      var emoteCmd = wordTokens[0].substring(1).toLowerCase(); // Assume first char is "!"
       if (emotes.hasOwnProperty(emoteCmd)) {
         broadcast("\n" + emotes[emoteCmd], "room", stream.roomname);
       }
