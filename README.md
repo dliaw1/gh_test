@@ -17,7 +17,7 @@ This server requires node and npm to be installed in order to run.
 To run the telnet server:
 1. Checkout the develop branch of the repo with `git checkout develop`. There is a identical file on the master branch but due to some message changes it is currently broken.
 2. Run `node index.js`; again, you should get a message saying that the server is running. No additional libraries are required.
-3. To connect, ssh to localhost on port 9001.
+3. To connect, telnet to localhost on port 9001.
 ## Features
 In addition to the basic features outlined in the project specification, this server also supports:
 - ssh
@@ -26,6 +26,7 @@ In addition to the basic features outlined in the project specification, this se
 - emotes
 - private messaging
 - name/emote autocompletion
+
 Most features are described in the in-client help menu. Below are a few selected features which require a little more elucidation.
 ### Emotes
 To insert an emote image into chat, type an exclamation point directly followed by the name of the emote. For example, `!emote`. Below is a list of emotes to get you started; to discover the rest, try using the auto-complete function, described next.
