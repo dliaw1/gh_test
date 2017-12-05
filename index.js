@@ -45,7 +45,7 @@ var server = net.createServer(socket => {
       return;
     }
     else {
-      broadcast(socket.username + ": " + Buffer.from(dataStr) + "\n", socket, socket.roomname);
+      broadcast(socket.username + ": " + dataStr + "\n", socket, socket.roomname);
     }
     socket.write(sm.readyPrompt);
   });
